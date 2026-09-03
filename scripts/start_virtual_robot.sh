@@ -39,7 +39,7 @@ ros2 launch slam_robot_bringup virtual_robot.launch.py \
 LAUNCH_PID=$!
 
 # Give nodes a moment to start and discover each other.
-sleep 4
+sleep 8
 
 echo "=== Launching RViz2 ==="
 rviz2 -d "$RVIZ_CONFIG"
