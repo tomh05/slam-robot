@@ -1,35 +1,3 @@
-Panels:
-  - Class: rviz_default_plugins/Displays
-    Help Height: 84
-    Name: Displays
-    Property Tree Widget:
-      Expanded:
-        - /Global Options1
-        - /Status1
-        - /Grid1
-        - /TF1
-        - /RobotModel1
-        - /Odometry1
-        - /LaserScan1
-      Splitter Ratio: 0.588679016
-    Splitter Ratio: 0.452447527
-  - Class: rviz_default_plugins/Views
-    Expanded:
-      - /Current View1
-    Name: Views
-    Splitter Ratio: 0.5
-  - Class: rviz_default_plugins/Selection
-    Name: Selection
-  - Class: rviz_default_plugins/Tool Properties
-    Expanded:
-      - /2D Pose Estimate1
-      - /2D Nav Goal1
-      - /Publish Point1
-    Name: Tool Properties
-    Splitter Ratio: 0.493151212
-  - Class: rviz_default_plugins/Console
-    Name: Console
-    Splitter Ratio: 0.5
 Visualization Manager:
   Class: ""
   Displays:
