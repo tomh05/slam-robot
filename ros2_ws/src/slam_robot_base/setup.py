@@ -23,6 +23,8 @@ setup(
     entry_points={
         'console_scripts': [
             'arduino_base_node = slam_robot_base.arduino_base_node:main',
+            'fake_base_node = slam_robot_base.fake_base_node:main',
+            'fake_lidar_node = slam_robot_base.fake_lidar_node:main',
         ],
     },
 )
