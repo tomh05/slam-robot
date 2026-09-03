@@ -1,0 +1,439 @@
+/*
+  Arduino Nano base controller for tracked SLAM robot.
+
+  Hardware assumptions:
+    - Arduino Nano clone, likely ATmega328P + CH340C, 5 V logic.
+    - HW-354 / MX1508 dual motor controller.
+    - Two DC gear motors with hall/encoder signals S1/S2.
+    - Raspberry Pi talks to this firmware over USB serial.
+
+  Serial protocol, first version:
+    Pi -> Arduino:
+      V <left_ticks_per_sec> <right_ticks_per_sec>\n
+      S\n
+      ?\n
+      Z\n      # zero encoder counts, useful during bench testing
+      R\n      # report raw encoder pin levels and transition counts, useful during pinout testing
+
+    Arduino -> Pi, periodic:
+      E <millis> <left_count> <right_count> <left_tps> <right_tps> <left_pwm> <right_pwm>\n
+      R <millis> <left_s1> <left_s2> <right_s1> <right_s2> <left_s1_edges> <left_s2_edges> <right_s1_edges> <right_s2_edges>\n
+
+  Safety:
+    - Motors are stopped on boot.
+    - Motors stop if no V command is received within COMMAND_TIMEOUT_MS.
+
+  Notes:
+    - Encoders are used as single-channel (x1) tachometers only.
+    - The right encoder has a hardware fault: only one of its two signal wires (S1/S2)
+      is producing pulses. Direction cannot be determined from hardware.
+    - Instead, direction is inferred from the commanded motor direction: the ISR counts
+      every rising edge on S2 as +1, and the control loop negates the tick delta when
+      the previous PWM command was negative.
+    - This means distance is accurate but the robot cannot detect slip or unexpected
+      direction changes from the encoders alone.
+    - PID gains are deliberately conservative placeholders.
+*/
+
+#include <Arduino.h>
+
+// ---------------- Pin mapping ----------------
+
+// MX1508 motor inputs. All selected pins support PWM on classic Nano.
+const uint8_t LEFT_IN_A = 5;   // HW-354 INA
+const uint8_t LEFT_IN_B = 6;   // HW-354 INB
+const uint8_t RIGHT_IN_A = 9;  // HW-354 INC
+const uint8_t RIGHT_IN_B = 10; // HW-354 IND
+
+// Encoder/hall inputs, matching the existing board pinout.
+// On a classic Nano, D2/D3 are the external interrupt pins, so S2 is the
+// counted channel. S1 is no longer read for direction (right encoder hardware
+// fault: only one signal wire produces pulses), but the pin definition is
+// retained so raw edge counters in the R response can still be used for
+// debugging.
+const uint8_t LEFT_ENC_S1 = 4;    // Motor A S1 (unused for direction)
+const uint8_t LEFT_ENC_S2 = 2;    // Motor A S2, INT0 counted channel
+const uint8_t RIGHT_ENC_S1 = 7;   // Motor B S1 (unused for direction)
+const uint8_t RIGHT_ENC_S2 = 3;   // Motor B S2, INT1 counted channel
+
+// ---------------- Configuration ----------------
+
+const unsigned long SERIAL_BAUD = 115200;
+const unsigned long CONTROL_PERIOD_MS = 20;  // 50 Hz
+const unsigned long REPORT_PERIOD_MS = 50;   // 20 Hz
+const unsigned long COMMAND_TIMEOUT_MS = 400;
+
+const int MAX_PWM = 180;        // keep conservative for first tests; max is 255
+const int MIN_EFFECTIVE_PWM = 0; // can be raised later to overcome stiction
+
+// Direction inversion flags for motor outputs. Change during calibration.
+// Encoder direction is now inferred from commanded motor direction, so there are
+// no separate encoder-sign flags.
+const int LEFT_MOTOR_SIGN = 1;
+const int RIGHT_MOTOR_SIGN = 1;
+
+// Simple PI controller gains. These are placeholders.
+float KP = 0.8f;
+float KI = 0.05f;
+float KD = 0.0f;
+
+// ---------------- State ----------------
+
+volatile long left_count = 0;
+volatile long right_count = 0;
+
+long last_left_count = 0;
+long last_right_count = 0;
+
+float left_target_tps = 0.0f;
+float right_target_tps = 0.0f;
+float left_measured_tps = 0.0f;
+float right_measured_tps = 0.0f;
+
+float left_integral = 0.0f;
+float right_integral = 0.0f;
+float left_last_error = 0.0f;
+float right_last_error = 0.0f;
+
+int left_pwm = 0;
+int right_pwm = 0;
+
+unsigned long last_control_ms = 0;
+unsigned long last_report_ms = 0;
+unsigned long last_command_ms = 0;
+
+uint8_t last_left_s1_level = 0;
+uint8_t last_left_s2_level = 0;
+uint8_t last_right_s1_level = 0;
+uint8_t last_right_s2_level = 0;
+unsigned long left_s1_edges = 0;
+unsigned long left_s2_edges = 0;
+unsigned long right_s1_edges = 0;
+unsigned long right_s2_edges = 0;
+
+char input_line[64];
+uint8_t input_len = 0;
+
+// ---------------- Encoder interrupts ----------------
+
+void leftEncoderIsr() {
+  // Single-channel tachometer: count every rising edge on S2.
+  // Direction is inferred from commanded motor direction in the control loop.
+  left_count++;
+}
+
+void rightEncoderIsr() {
+  right_count++;
+}
+
+// ---------------- Motor output ----------------
+
+void setMx1508Motor(uint8_t in_a, uint8_t in_b, int pwm_command) {
+  pwm_command = constrain(pwm_command, -MAX_PWM, MAX_PWM);
+
+  if (pwm_command > 0) {
+    analogWrite(in_a, pwm_command);
+    analogWrite(in_b, 0);
+  } else if (pwm_command < 0) {
+    analogWrite(in_a, 0);
+    analogWrite(in_b, -pwm_command);
+  } else {
+    // Coast/stop.
+    analogWrite(in_a, 0);
+    analogWrite(in_b, 0);
+  }
+}
+
+void applyMotorOutputs() {
+  setMx1508Motor(LEFT_IN_A, LEFT_IN_B, LEFT_MOTOR_SIGN * left_pwm);
+  setMx1508Motor(RIGHT_IN_A, RIGHT_IN_B, RIGHT_MOTOR_SIGN * right_pwm);
+}
+
+void stopMotors() {
+  left_target_tps = 0.0f;
+  right_target_tps = 0.0f;
+  left_integral = 0.0f;
+  right_integral = 0.0f;
+  left_last_error = 0.0f;
+  right_last_error = 0.0f;
+  left_pwm = 0;
+  right_pwm = 0;
+  applyMotorOutputs();
+}
+
+// ---------------- Serial protocol ----------------
+
+void handleLine(char *line) {
+  // Trim leading spaces.
+  while (*line == ' ' || *line == '\t') {
+    line++;
+  }
+
+  if (line[0] == 'V') {
+    long l = 0;
+    long r = 0;
+    if (sscanf(line + 1, "%ld %ld", &l, &r) == 2) {
+      left_target_tps = (float)l;
+      right_target_tps = (float)r;
+      last_command_ms = millis();
+      // Do not acknowledge every velocity command: the Pi sends these at
+      // control-loop rate, and ACK spam can interleave with periodic status.
+    } else {
+      Serial.println(F("ERR bad V"));
+    }
+  } else if (line[0] == 'S') {
+    stopMotors();
+    last_command_ms = millis();
+    Serial.println(F("OK stop"));
+  } else if (line[0] == '?') {
+    reportStatus();
+  } else if (line[0] == 'Z') {
+    zeroEncoders();
+    Serial.println(F("OK zero"));
+  } else if (line[0] == 'R') {
+    reportRawEncoderPins();
+  } else if (line[0] == 'P') {
+    float kp = KP;
+    float ki = KI;
+    float kd = KD;
+    if (sscanf(line + 1, "%f %f %f", &kp, &ki, &kd) == 3) {
+      KP = kp;
+      KI = ki;
+      KD = kd;
+      Serial.println(F("OK pid"));
+    } else {
+      Serial.println(F("ERR bad P"));
+    }
+  } else {
+    Serial.println(F("ERR unknown"));
+  }
+}
+
+void readSerial() {
+  while (Serial.available() > 0) {
+    char c = (char)Serial.read();
+    if (c == '\r') {
+      continue;
+    }
+    if (c == '\n') {
+      input_line[input_len] = '\0';
+      if (input_len > 0) {
+        handleLine(input_line);
+      }
+      input_len = 0;
+    } else if (input_len < sizeof(input_line) - 1) {
+      input_line[input_len++] = c;
+    } else {
+      // Overflow: reset line buffer.
+      input_len = 0;
+      Serial.println(F("ERR line too long"));
+    }
+  }
+}
+
+// ---------------- Control loop ----------------
+
+int updateOneMotor(
+  float target_tps,
+  float measured_tps,
+  float &integral,
+  float &last_error,
+  int current_pwm,
+  float dt_s
+) {
+  if (target_tps == 0.0f) {
+    integral = 0.0f;
+    last_error = 0.0f;
+    return 0;
+  }
+
+  float error = target_tps - measured_tps;
+  integral += error * dt_s;
+  integral = constrain(integral, -1000.0f, 1000.0f);
+  float derivative = (error - last_error) / dt_s;
+  last_error = error;
+
+  float output = KP * error + KI * integral + KD * derivative;
+
+  // This controller output is interpreted as a PWM delta around current command.
+  int new_pwm = current_pwm + (int)output;
+  new_pwm = constrain(new_pwm, -MAX_PWM, MAX_PWM);
+
+  if (new_pwm != 0 && abs(new_pwm) < MIN_EFFECTIVE_PWM) {
+    new_pwm = (new_pwm > 0) ? MIN_EFFECTIVE_PWM : -MIN_EFFECTIVE_PWM;
+  }
+
+  return new_pwm;
+}
+
+void controlLoop() {
+  unsigned long now = millis();
+  unsigned long elapsed_ms = now - last_control_ms;
+  if (elapsed_ms < CONTROL_PERIOD_MS) {
+    return;
+  }
+  last_control_ms = now;
+
+  if (now - last_command_ms > COMMAND_TIMEOUT_MS) {
+    stopMotors();
+    return;
+  }
+
+  long left_now;
+  long right_now;
+  noInterrupts();
+  left_now = left_count;
+  right_now = right_count;
+  interrupts();
+
+  long left_delta = left_now - last_left_count;
+  long right_delta = right_now - last_right_count;
+  last_left_count = left_now;
+  last_right_count = right_now;
+
+  // Encoder is single-channel (counts only up). Direction is inferred from the
+  // commanded motor direction: negate the delta when the previous PWM was
+  // negative so the PID and reported tps have the correct polarity.
+  if (left_pwm < 0) left_delta = -left_delta;
+  if (right_pwm < 0) right_delta = -right_delta;
+
+  float dt_s = elapsed_ms / 1000.0f;
+  if (dt_s <= 0.0f) {
+    return;
+  }
+
+  left_measured_tps = left_delta / dt_s;
+  right_measured_tps = right_delta / dt_s;
+
+  left_pwm = updateOneMotor(left_target_tps, left_measured_tps, left_integral, left_last_error, left_pwm, dt_s);
+  right_pwm = updateOneMotor(right_target_tps, right_measured_tps, right_integral, right_last_error, right_pwm, dt_s);
+
+  applyMotorOutputs();
+}
+
+void zeroEncoders() {
+  noInterrupts();
+  left_count = 0;
+  right_count = 0;
+  interrupts();
+
+  last_left_count = 0;
+  last_right_count = 0;
+  left_measured_tps = 0.0f;
+  right_measured_tps = 0.0f;
+}
+
+void pollEncoderPinChanges() {
+  uint8_t left_s1 = digitalRead(LEFT_ENC_S1);
+  uint8_t left_s2 = digitalRead(LEFT_ENC_S2);
+  uint8_t right_s1 = digitalRead(RIGHT_ENC_S1);
+  uint8_t right_s2 = digitalRead(RIGHT_ENC_S2);
+
+  if (left_s1 != last_left_s1_level) {
+    left_s1_edges++;
+    last_left_s1_level = left_s1;
+  }
+  if (left_s2 != last_left_s2_level) {
+    left_s2_edges++;
+    last_left_s2_level = left_s2;
+  }
+  if (right_s1 != last_right_s1_level) {
+    right_s1_edges++;
+    last_right_s1_level = right_s1;
+  }
+  if (right_s2 != last_right_s2_level) {
+    right_s2_edges++;
+    last_right_s2_level = right_s2;
+  }
+}
+
+void reportRawEncoderPins() {
+  Serial.print(F("R "));
+  Serial.print(millis());
+  Serial.print(' ');
+  Serial.print(digitalRead(LEFT_ENC_S1));
+  Serial.print(' ');
+  Serial.print(digitalRead(LEFT_ENC_S2));
+  Serial.print(' ');
+  Serial.print(digitalRead(RIGHT_ENC_S1));
+  Serial.print(' ');
+  Serial.print(digitalRead(RIGHT_ENC_S2));
+  Serial.print(' ');
+  Serial.print(left_s1_edges);
+  Serial.print(' ');
+  Serial.print(left_s2_edges);
+  Serial.print(' ');
+  Serial.print(right_s1_edges);
+  Serial.print(' ');
+  Serial.println(right_s2_edges);
+}
+
+void reportStatus() {
+  long left_now;
+  long right_now;
+  noInterrupts();
+  left_now = left_count;
+  right_now = right_count;
+  interrupts();
+
+  Serial.print(F("E "));
+  Serial.print(millis());
+  Serial.print(' ');
+  Serial.print(left_now);
+  Serial.print(' ');
+  Serial.print(right_now);
+  Serial.print(' ');
+  Serial.print((long)left_measured_tps);
+  Serial.print(' ');
+  Serial.print((long)right_measured_tps);
+  Serial.print(' ');
+  Serial.print(left_pwm);
+  Serial.print(' ');
+  Serial.println(right_pwm);
+}
+
+void maybeReport() {
+  unsigned long now = millis();
+  if (now - last_report_ms >= REPORT_PERIOD_MS) {
+    last_report_ms = now;
+    reportStatus();
+  }
+}
+
+// ---------------- Arduino entry points ----------------
+
+void setup() {
+  pinMode(LEFT_IN_A, OUTPUT);
+  pinMode(LEFT_IN_B, OUTPUT);
+  pinMode(RIGHT_IN_A, OUTPUT);
+  pinMode(RIGHT_IN_B, OUTPUT);
+
+  stopMotors();
+
+  pinMode(LEFT_ENC_S1, INPUT_PULLUP);
+  pinMode(LEFT_ENC_S2, INPUT_PULLUP);
+  pinMode(RIGHT_ENC_S1, INPUT_PULLUP);
+  pinMode(RIGHT_ENC_S2, INPUT_PULLUP);
+
+  last_left_s1_level = digitalRead(LEFT_ENC_S1);
+  last_left_s2_level = digitalRead(LEFT_ENC_S2);
+  last_right_s1_level = digitalRead(RIGHT_ENC_S1);
+  last_right_s2_level = digitalRead(RIGHT_ENC_S2);
+
+  attachInterrupt(digitalPinToInterrupt(LEFT_ENC_S2), leftEncoderIsr, RISING);
+  attachInterrupt(digitalPinToInterrupt(RIGHT_ENC_S2), rightEncoderIsr, RISING);
+
+  Serial.begin(SERIAL_BAUD);
+  last_control_ms = millis();
+  last_report_ms = millis();
+  last_command_ms = 0;
+
+  Serial.println(F("BOOT arduino_nano_base_controller"));
+}
+
+void loop() {
+  pollEncoderPinChanges();
+  readSerial();
+  controlLoop();
+  maybeReport();
+}

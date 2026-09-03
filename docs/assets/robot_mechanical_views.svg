@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1100" viewBox="0 0 1600 1100">
+  <title>SLAM robot mechanical schematic - top, side, and front views</title>
+  <desc>Mechanical schematic using measured dimensions. All mechanical views use the same scale: 2 SVG units per millimetre.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style><![CDATA[
+      .title { font: 700 22px Arial, sans-serif; fill: #111; }
+      .subtitle { font: 13px Arial, sans-serif; fill: #333; }
+      .label { font: 12px Arial, sans-serif; fill: #111; }
+      .small { font: 10.5px Arial, sans-serif; fill: #333; }
+      .ontrack { font: 10px Arial, sans-serif; fill: #fff; opacity: 0.9; }
+      .dim { font: 11px Arial, sans-serif; fill: #111; }
+      .axis { font: 11px Arial, sans-serif; fill: #555; }
+      .track { fill: #202020; stroke: #000; stroke-width: 1.2; }
+      .track-mid { fill: #3a3a3a; stroke: #777; stroke-width: 0.8; }
+      .wheel { fill: #555; stroke: #111; stroke-width: 1; }
+      .wheel-centre { fill: #e0e0e0; stroke: #111; stroke-width: 1.2; }
+      .driven { fill: #f4c542; stroke: #9a6700; stroke-width: 2; }
+      .platform { fill: #b8c0c8; stroke: #55616b; stroke-width: 1.2; }
+      .footprint { fill: none; stroke: #c62828; stroke-width: 1.2; stroke-dasharray: 7 5; }
+      .contact { stroke: #1e88e5; stroke-width: 2; stroke-dasharray: 6 4; }
+      .lidar { fill: none; stroke: #1565c0; stroke-width: 1.5; stroke-dasharray: 5 4; }
+      .scan { stroke: #1565c0; stroke-width: 1.4; stroke-dasharray: 8 5; }
+      .ground { stroke: #333; stroke-width: 1.5; }
+      .dimline { stroke: #333; stroke-width: 1; fill: none; marker-start: url(#arrow); marker-end: url(#arrow); }
+      .ext { stroke: #777; stroke-width: 0.8; stroke-dasharray: 3 3; }
+      .centerline { stroke: #777; stroke-width: 0.8; stroke-dasharray: 4 4; }
+      .callout { stroke: #555; stroke-width: 1; fill: none; marker-end: url(#arrow); }
+    ]]></style>
+  </defs>
+
+  <text x="40" y="35" class="title">SLAM robot mechanical schematic</text>
+  <text x="40" y="58" class="subtitle">Scale for top, side, and front views: 2 SVG units = 1 mm. Dimensions are measured unless marked provisional/assumed.</text>
+  <text x="40" y="78" class="subtitle">Coordinate convention: x forward, y left, z up. Lidar is provisionally centred with scan plane at 100 mm above ground.</text>
+
+  <!-- TOP VIEW: origin x=90, y=135; scale 2 px/mm; footprint 185 mm x 204 mm -->
+  <g id="top-view" transform="translate(90,135)">
+    <text x="0" y="-32" class="title">1A. Top view</text>
+    <text x="0" y="-12" class="subtitle">Forward is to the right. Left track is the upper track.</text>
+
+    <rect x="0" y="0" width="370" height="408" class="footprint"/>
+    <rect x="0" y="7" width="370" height="84" rx="42" ry="42" class="track"/>
+    <rect x="0" y="317" width="370" height="84" rx="42" ry="42" class="track"/>
+    <rect x="15" y="109" width="340" height="190" class="platform"/>
+
+    <!-- Wheel centres only in top view: wheel diameter is a side/front-view dimension, not a top-plan circle. -->
+    <line x1="58" y1="49" x2="312" y2="49" class="contact"/>
+    <line x1="58" y1="359" x2="312" y2="359" class="contact"/>
+    <g id="top-wheel-centres">
+      <circle cx="58" cy="49" r="8" class="driven"/>
+      <circle cx="185" cy="49" r="6" class="wheel-centre"/>
+      <circle cx="312" cy="49" r="6" class="wheel-centre"/>
+      <circle cx="58" cy="359" r="6" class="wheel-centre"/>
+      <circle cx="185" cy="359" r="6" class="wheel-centre"/>
+      <circle cx="312" cy="359" r="8" class="driven"/>
+      <line x1="58" y1="31" x2="58" y2="67" class="centerline"/>
+      <line x1="185" y1="31" x2="185" y2="67" class="centerline"/>
+      <line x1="312" y1="31" x2="312" y2="67" class="centerline"/>
+      <line x1="58" y1="341" x2="58" y2="377" class="centerline"/>
+      <line x1="185" y1="341" x2="185" y2="377" class="centerline"/>
+      <line x1="312" y1="341" x2="312" y2="377" class="centerline"/>
+    </g>
+
+    <text x="50" y="138" class="label">assumed platform</text>
+    <text x="50" y="156" class="label">170 × 95 × 3 mm</text>
+    <line x1="185" y1="174" x2="185" y2="234" class="lidar"/>
+    <line x1="155" y1="204" x2="215" y2="204" class="lidar"/>
+    <circle cx="185" cy="204" r="22" class="lidar"/>
+    <text x="220" y="200" class="small">provisional centred lidar</text>
+    <text x="220" y="216" class="small">scan plane z = 100 mm</text>
+
+    <text x="112" y="36" class="ontrack">left rear driven</text>
+    <text x="166" y="382" class="ontrack">right front driven</text>
+
+    <!-- Axes -->
+    <line x1="405" y1="350" x2="465" y2="350" stroke="#2e7d32" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="472" y="354" class="axis">x forward</text>
+    <line x1="405" y1="350" x2="405" y2="290" stroke="#2e7d32" stroke-width="2" marker-end="url(#arrow)"/>
+    <text x="386" y="283" class="axis">y left</text>
+
+    <!-- Dimension lines -->
+    <line x1="0" y1="445" x2="370" y2="445" class="dimline"/>
+    <line x1="0" y1="408" x2="0" y2="453" class="ext"/>
+    <line x1="370" y1="408" x2="370" y2="453" class="ext"/>
+    <text x="145" y="469" class="dim">185 mm length</text>
+
+    <line x1="-45" y1="0" x2="-45" y2="408" class="dimline"/>
+    <line x1="0" y1="0" x2="-55" y2="0" class="ext"/>
+    <line x1="0" y1="408" x2="-55" y2="408" class="ext"/>
+    <text x="-70" y="245" class="dim" transform="rotate(-90 -70 245)">204 mm overall width</text>
+
+    <line x1="408" y1="49" x2="408" y2="359" class="dimline"/>
+    <line x1="312" y1="49" x2="418" y2="49" class="ext"/>
+    <line x1="312" y1="359" x2="418" y2="359" class="ext"/>
+    <text x="422" y="185" class="dim">155 mm track c/c</text>
+
+    <line x1="452" y1="91" x2="452" y2="317" class="dimline"/>
+    <line x1="370" y1="91" x2="462" y2="91" class="ext"/>
+    <line x1="370" y1="317" x2="462" y2="317" class="ext"/>
+    <text x="466" y="230" class="dim">113 mm inner gap</text>
+
+    <line x1="58" y1="-42" x2="312" y2="-42" class="dimline"/>
+    <line x1="58" y1="7" x2="58" y2="-50" class="ext"/>
+    <line x1="312" y1="7" x2="312" y2="-50" class="ext"/>
+    <text x="136" y="-50" class="dim">127 mm wheel-centre contact length</text>
+  </g>
+
+  <!-- SIDE VIEW: origin x=760, ground y=455; scale 2 px/mm -->
+  <g id="side-view" transform="translate(760,455)">
+    <text x="0" y="-330" class="title">1B. Side view</text>
+    <text x="0" y="-310" class="subtitle">Wheel/track envelope and provisional platform/lidar heights.</text>
+    <line x1="-25" y1="0" x2="420" y2="0" class="ground"/>
+    <text x="-20" y="18" class="small">ground</text>
+
+    <rect x="0" y="-116" width="370" height="116" rx="58" ry="58" class="track"/>
+    <circle cx="58" cy="-58" r="58" class="wheel" opacity="0.5"/>
+    <circle cx="185" cy="-58" r="42" class="track-mid" opacity="0.55"/>
+    <circle cx="312" cy="-58" r="58" class="wheel" opacity="0.5"/>
+    <circle cx="58" cy="-58" r="13" class="driven"/>
+    <circle cx="312" cy="-58" r="10" class="driven" opacity="0.65"/>
+    <text x="15" y="-132" class="small">rear wheel driven on left track</text>
+    <text x="205" y="-132" class="small">front wheel driven on right track</text>
+
+    <rect x="15" y="-92" width="340" height="6" class="platform"/>
+    <text x="35" y="-102" class="small">platform underside z = 43 mm; thickness = 3 mm</text>
+
+    <line x1="-10" y1="-200" x2="390" y2="-200" class="scan"/>
+    <circle cx="185" cy="-200" r="12" class="lidar"/>
+    <line x1="185" y1="-86" x2="185" y2="-200" class="lidar"/>
+    <text x="205" y="-217" class="label">provisional lidar scan plane</text>
+    <text x="205" y="-201" class="label">z = 100 mm above ground</text>
+
+    <line x1="0" y1="34" x2="370" y2="34" class="dimline"/>
+    <line x1="0" y1="0" x2="0" y2="42" class="ext"/>
+    <line x1="370" y1="0" x2="370" y2="42" class="ext"/>
+    <text x="157" y="58" class="dim">185 mm</text>
+
+    <line x1="-48" y1="0" x2="-48" y2="-116" class="dimline"/>
+    <line x1="0" y1="0" x2="-58" y2="0" class="ext"/>
+    <line x1="0" y1="-116" x2="-58" y2="-116" class="ext"/>
+    <text x="-85" y="-40" class="dim" transform="rotate(-90 -85 -40)">58 mm wheel/track diameter</text>
+
+    <line x1="430" y1="0" x2="430" y2="-86" class="dimline"/>
+    <line x1="355" y1="-86" x2="438" y2="-86" class="ext"/>
+    <line x1="370" y1="0" x2="438" y2="0" class="ext"/>
+    <text x="442" y="-38" class="dim">43 mm underside</text>
+
+    <line x1="500" y1="0" x2="500" y2="-200" class="dimline"/>
+    <line x1="390" y1="-200" x2="508" y2="-200" class="ext"/>
+    <line x1="390" y1="0" x2="508" y2="0" class="ext"/>
+    <text x="512" y="-95" class="dim">100 mm scan plane</text>
+  </g>
+
+  <!-- FRONT VIEW: origin x=90, ground y=995; scale 2 px/mm -->
+  <g id="front-view" transform="translate(90,995)">
+    <text x="0" y="-330" class="title">1C. Front view</text>
+    <text x="0" y="-310" class="subtitle">Overall width includes small overhang beyond the measured track geometry.</text>
+    <line x1="-25" y1="0" x2="430" y2="0" class="ground"/>
+
+    <rect x="0" y="-220" width="408" height="220" class="footprint"/>
+    <rect x="7" y="-116" width="84" height="116" rx="14" ry="14" class="track"/>
+    <rect x="317" y="-116" width="84" height="116" rx="14" ry="14" class="track"/>
+    <line x1="49" y1="-126" x2="49" y2="10" class="centerline"/>
+    <line x1="359" y1="-126" x2="359" y2="10" class="centerline"/>
+    <rect x="109" y="-92" width="190" height="6" class="platform"/>
+    <text x="128" y="-101" class="small">platform width 95 mm</text>
+
+    <line x1="30" y1="-200" x2="378" y2="-200" class="scan"/>
+    <circle cx="204" cy="-200" r="12" class="lidar"/>
+    <text x="224" y="-206" class="small">lidar scan z = 100 mm</text>
+
+    <line x1="0" y1="38" x2="408" y2="38" class="dimline"/>
+    <line x1="0" y1="0" x2="0" y2="46" class="ext"/>
+    <line x1="408" y1="0" x2="408" y2="46" class="ext"/>
+    <text x="153" y="62" class="dim">204 mm overall width</text>
+
+    <line x1="49" y1="-154" x2="359" y2="-154" class="dimline"/>
+    <line x1="49" y1="-126" x2="49" y2="-162" class="ext"/>
+    <line x1="359" y1="-126" x2="359" y2="-162" class="ext"/>
+    <text x="153" y="-166" class="dim">155 mm track c/c</text>
+
+    <line x1="91" y1="-134" x2="317" y2="-134" class="dimline"/>
+    <line x1="91" y1="-116" x2="91" y2="-142" class="ext"/>
+    <line x1="317" y1="-116" x2="317" y2="-142" class="ext"/>
+    <text x="157" y="-118" class="dim">113 mm inner gap</text>
+
+    <line x1="7" y1="-178" x2="91" y2="-178" class="dimline"/>
+    <line x1="7" y1="-116" x2="7" y2="-186" class="ext"/>
+    <line x1="91" y1="-116" x2="91" y2="-186" class="ext"/>
+    <text x="27" y="-192" class="dim">42 mm</text>
+
+    <line x1="455" y1="0" x2="455" y2="-200" class="dimline"/>
+    <line x1="378" y1="-200" x2="463" y2="-200" class="ext"/>
+    <line x1="408" y1="0" x2="463" y2="0" class="ext"/>
+    <text x="467" y="-95" class="dim">100 mm</text>
+  </g>
+
+  <g id="legend" transform="translate(720,725)">
+    <text x="0" y="0" class="title">Legend / assumptions</text>
+    <rect x="0" y="22" width="30" height="16" class="track"/><text x="42" y="35" class="label">track/wheel envelope</text>
+    <rect x="0" y="52" width="30" height="16" class="platform"/><text x="42" y="65" class="label">assumed centre platform: 170 × 95 × 3 mm</text>
+    <line x1="0" y1="92" x2="32" y2="92" class="scan"/><text x="42" y="96" class="label">provisional lidar scan plane</text>
+    <rect x="0" y="112" width="30" height="16" class="footprint"/><text x="42" y="125" class="label">measured overall footprint: 185 × 204 mm</text>
+    <circle cx="15" cy="154" r="10" class="driven"/><text x="42" y="158" class="label">driven wheel: left rear, right front</text>
+    <circle cx="15" cy="186" r="6" class="wheel-centre"/><text x="42" y="190" class="label">wheel-centre marker in top view</text>
+    <text x="0" y="225" class="small">Top view shows wheel centres rather than circles because the 58 mm wheel diameter is vertical in side/front views.</text>
+    <text x="0" y="244" class="small">Track contact length is the front-to-rear wheel-centre distance: 127 mm.</text>
+  </g>
+</svg>

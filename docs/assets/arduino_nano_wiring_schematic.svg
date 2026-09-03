@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1200" viewBox="0 0 1700 1200">
+  <title>Arduino Nano motor, encoder, and driver wiring schematic</title>
+  <desc>Detailed Arduino Nano wiring to HW-354/MX1508 motor controller, left/right motors, hall encoders, and Raspberry Pi USB serial.</desc>
+  <defs>
+    <marker id="arrowSig" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style><![CDATA[
+      .title { font: 700 24px Arial, sans-serif; fill: #111; }
+      .subtitle { font: 13px Arial, sans-serif; fill: #333; }
+      .label { font: 700 12px Arial, sans-serif; fill: #111; }
+      .small { font: 10.5px Arial, sans-serif; fill: #333; }
+      .tiny { font: 9.5px Arial, sans-serif; fill: #333; }
+      .block { fill: #f7f9fb; stroke: #263238; stroke-width: 1.6; rx: 10; ry: 10; }
+      .nano { fill: #e8f5e9; stroke: #1b5e20; stroke-width: 2; rx: 14; ry: 14; }
+      .driver { fill: #fff3e0; stroke: #e65100; stroke-width: 2; rx: 12; ry: 12; }
+      .motor { fill: #eeeeee; stroke: #333; stroke-width: 1.6; rx: 10; ry: 10; }
+      .warn { fill: #ffebee; stroke: #b71c1c; stroke-width: 1.5; rx: 10; ry: 10; }
+      .note { fill: #fff8e1; stroke: #e08200; stroke-width: 1.4; rx: 10; ry: 10; }
+      .pin { fill: #fff; stroke: #333; stroke-width: 1; }
+      .usb { stroke: #6a1b9a; stroke-width: 3.2; fill: none; }
+      .ctrl { stroke: #2e7d32; stroke-width: 2.4; fill: none; }
+      .enc { stroke: #00838f; stroke-width: 2.2; fill: none; stroke-dasharray: 6 4; }
+      .v5 { stroke: #1565c0; stroke-width: 3.6; fill: none; }
+      .gnd { stroke: #111; stroke-width: 3.6; fill: none; }
+      .motorv { stroke: #ef6c00; stroke-width: 4.2; fill: none; }
+      .buslabel { font: 700 11px Arial, sans-serif; }
+      .green { fill: #2e7d32; }
+      .blue { fill: #1565c0; }
+      .teal { fill: #00838f; }
+      .orange { fill: #ef6c00; }
+      .purple { fill: #6a1b9a; }
+    ]]></style>
+  </defs>
+
+  <text x="40" y="38" class="title">Arduino Nano wiring schematic</text>
+  <text x="40" y="62" class="subtitle">Detailed pin/function diagram for the Nano, HW-354/MX1508 motor driver, motor power terminals, and motor hall encoders.</text>
+  <text x="40" y="82" class="subtitle">Schematic only: component boxes and wire routing are arranged for readability, not as a physical layout or scale drawing.</text>
+
+  <!-- Raspberry Pi / USB -->
+  <rect x="55" y="145" width="235" height="118" class="block"/>
+  <text x="109" y="174" class="label">Raspberry Pi 4</text>
+  <text x="82" y="197" class="small">USB-A host port</text>
+  <text x="82" y="215" class="small">115200 baud to Nano</text>
+  <text x="82" y="233" class="tiny">/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0</text>
+  <text x="82" y="251" class="tiny">USB also powers/programs Nano</text>
+
+  <!-- Motor supply branch -->
+  <rect x="1030" y="110" width="250" height="82" class="block"/>
+  <text x="1055" y="139" class="label">Motor supply branch</text>
+  <text x="1055" y="161" class="small">fused/switched 6–9 V or 2S LiPo</text>
+  <text x="1055" y="179" class="small">common ground with Arduino</text>
+
+  <!-- Arduino Nano central -->
+  <rect x="515" y="155" width="320" height="610" class="nano"/>
+  <text x="602" y="184" class="label">Arduino Nano clone</text>
+  <text x="592" y="205" class="small">ATmega328P, CH340C USB</text>
+  <text x="607" y="223" class="small">old Nano bootloader</text>
+  <text x="555" y="246" class="small">Motor PWM, encoder counts, PID, safety timeout</text>
+
+  <rect x="602" y="112" width="145" height="43" class="block"/>
+  <text x="636" y="139" class="label">Mini USB</text>
+  <path d="M 290 205 C 380 205, 465 134, 602 134" class="usb" marker-end="url(#arrowSig)"/>
+  <text x="332" y="190" class="buslabel purple">USB 5 V + serial</text>
+
+  <!-- Nano pin pads left -->
+  <g id="nano-left-pins">
+    <rect x="495" y="285" width="20" height="16" class="pin"/><text x="444" y="298" class="label">D2 INT0</text><text x="536" y="298" class="small">left S2 counted</text>
+    <rect x="495" y="330" width="20" height="16" class="pin"/><text x="444" y="343" class="label">D3 INT1</text><text x="536" y="343" class="small">right S2 counted</text>
+    <rect x="495" y="375" width="20" height="16" class="pin"/><text x="469" y="388" class="label">D4</text><text x="536" y="388" class="small">left S1 (debug only)</text>
+    <rect x="495" y="420" width="20" height="16" class="pin"/><text x="469" y="433" class="label">D7</text><text x="536" y="433" class="small">right S1 (live signal)</text>
+    <rect x="495" y="555" width="20" height="16" class="pin"/><text x="464" y="568" class="label">5V</text><text x="536" y="568" class="small">hall VCC only</text>
+    <rect x="495" y="605" width="20" height="16" class="pin"/><text x="454" y="618" class="label">GND</text><text x="536" y="618" class="small">common ground</text>
+  </g>
+
+  <!-- Nano pin pads right -->
+  <g id="nano-right-pins">
+    <rect x="835" y="285" width="20" height="16" class="pin"/><text x="770" y="298" class="label">D5 PWM</text><text x="870" y="298" class="small">INA</text>
+    <rect x="835" y="330" width="20" height="16" class="pin"/><text x="770" y="343" class="label">D6 PWM</text><text x="870" y="343" class="small">INB</text>
+    <rect x="835" y="375" width="20" height="16" class="pin"/><text x="770" y="388" class="label">D9 PWM</text><text x="870" y="388" class="small">INC</text>
+    <rect x="835" y="420" width="20" height="16" class="pin"/><text x="763" y="433" class="label">D10 PWM</text><text x="870" y="433" class="small">IND</text>
+    <rect x="835" y="605" width="20" height="16" class="pin"/><text x="796" y="618" class="label">GND</text><text x="870" y="618" class="small">driver GND</text>
+  </g>
+
+  <text x="545" y="725" class="small">D0/D1 intentionally unused: shared with USB serial.</text>
+  <text x="545" y="745" class="small">Counts S2 rising edges (+1 only); direction from commanded PWM.</text>
+
+  <!-- HW-354 driver -->
+  <rect x="1030" y="235" width="245" height="370" class="driver"/>
+  <text x="1078" y="264" class="label">HW-354 / MX1508</text>
+  <text x="1091" y="285" class="small">dual motor driver</text>
+  <circle cx="1030" cy="293" r="5" fill="#2e7d32"/><text x="1045" y="297" class="small">INA</text>
+  <circle cx="1030" cy="338" r="5" fill="#2e7d32"/><text x="1045" y="342" class="small">INB</text>
+  <circle cx="1030" cy="383" r="5" fill="#2e7d32"/><text x="1045" y="387" class="small">INC</text>
+  <circle cx="1030" cy="428" r="5" fill="#2e7d32"/><text x="1045" y="432" class="small">IND</text>
+  <circle cx="1030" cy="590" r="5" fill="#111"/><text x="1045" y="594" class="small">GND</text>
+  <circle cx="1150" cy="235" r="5" fill="#ef6c00"/><text x="1162" y="239" class="small">VCC motor</text>
+  <circle cx="1275" cy="305" r="5" fill="#ef6c00"/><text x="1228" y="309" class="small">OUT1</text>
+  <circle cx="1275" cy="340" r="5" fill="#ef6c00"/><text x="1228" y="344" class="small">OUT2</text>
+  <circle cx="1275" cy="470" r="5" fill="#ef6c00"/><text x="1228" y="474" class="small">OUT3</text>
+  <circle cx="1275" cy="505" r="5" fill="#ef6c00"/><text x="1228" y="509" class="small">OUT4</text>
+
+  <!-- Driver power -->
+  <path d="M 1150 192 L 1150 235" class="motorv"/>
+  <path d="M 1220 192 L 1220 590 L 1030 590" class="gnd"/>
+  <text x="1158" y="216" class="buslabel orange">VCC</text>
+  <text x="1230" y="216" class="buslabel">GND</text>
+
+  <!-- Capacitor -->
+  <line x1="1122" y1="250" x2="1122" y2="590" stroke="#555" stroke-width="1.2"/>
+  <line x1="1112" y1="275" x2="1132" y2="275" stroke="#555" stroke-width="2"/>
+  <line x1="1112" y1="287" x2="1132" y2="287" stroke="#555" stroke-width="2"/>
+  <text x="1138" y="282" class="tiny">1000 µF</text>
+  <text x="1138" y="298" class="tiny">16/25 V</text>
+
+  <!-- Motors -->
+  <rect x="1370" y="250" width="230" height="138" class="motor"/>
+  <text x="1432" y="278" class="label">Left motor</text>
+  <text x="1405" y="300" class="small">Motor A / left track</text>
+  <text x="1405" y="318" class="small">rear wheel driven</text>
+  <text x="1405" y="342" class="tiny">connector pins: M+ M− GND VCC S1 S2</text>
+
+  <rect x="1370" y="455" width="230" height="150" class="motor"/>
+  <text x="1428" y="483" class="label">Right motor</text>
+  <text x="1405" y="505" class="small">Motor B / right track</text>
+  <text x="1405" y="523" class="small">front wheel driven</text>
+  <text x="1405" y="547" class="tiny">connector pins: M+ M− GND VCC S1 S2</text>
+  <text x="1405" y="567" class="tiny">right S1/D7: only live right encoder channel</text>
+
+  <!-- Driver outputs to motor M+/M- -->
+  <path d="M 1275 305 L 1370 305" class="motorv"/>
+  <path d="M 1275 340 L 1370 340" class="motorv"/>
+  <path d="M 1275 470 L 1370 470" class="motorv"/>
+  <path d="M 1275 505 L 1370 505" class="motorv"/>
+
+  <!-- Nano PWM to driver inputs -->
+  <path d="M 855 293 L 1030 293" class="ctrl" marker-end="url(#arrowSig)"/>
+  <path d="M 855 338 L 1030 338" class="ctrl" marker-end="url(#arrowSig)"/>
+  <path d="M 855 383 L 1030 383" class="ctrl" marker-end="url(#arrowSig)"/>
+  <path d="M 855 428 L 1030 428" class="ctrl" marker-end="url(#arrowSig)"/>
+  <text x="905" y="276" class="buslabel green">PWM control lines</text>
+  <path d="M 855 613 L 1030 590" class="gnd"/>
+
+  <!-- Encoder/hall signal lanes and supply buses -->
+  <path d="M 495 293 L 430 293 L 430 850 L 1370 850 L 1370 358" class="enc" marker-end="url(#arrowSig)"/>
+  <path d="M 495 383 L 455 383 L 455 872 L 1398 872 L 1398 358" class="enc" marker-end="url(#arrowSig)"/>
+  <text x="485" y="842" class="buslabel teal">left encoder: D2→S2 counted, D4→S1 debug only</text>
+
+  <path d="M 495 338 L 405 338 L 405 925 L 1370 925 L 1370 575" class="enc" marker-end="url(#arrowSig)"/>
+  <path d="M 495 428 L 380 428 L 380 947 L 1398 947 L 1398 575" class="enc" marker-end="url(#arrowSig)"/>
+  <text x="485" y="918" class="buslabel teal">right encoder: D3→S2 dead, D7→S1 live signal</text>
+
+  <path d="M 495 563 L 350 563 L 350 1000 L 1430 1000 L 1430 388" class="v5"/>
+  <path d="M 1430 1000 L 1430 605" class="v5"/>
+  <text x="485" y="992" class="buslabel blue">Arduino 5 V to both motor hall VCC pins only</text>
+
+  <path d="M 495 613 L 320 613 L 320 1040 L 1460 1040 L 1460 388" class="gnd"/>
+  <path d="M 1460 1040 L 1460 605" class="gnd"/>
+  <text x="485" y="1032" class="buslabel">common GND to encoders and motor driver</text>
+
+  <!-- Pin mapping table -->
+  <rect x="55" y="330" width="375" height="326" class="block"/>
+  <text x="78" y="360" class="label">Firmware pin mapping</text>
+  <text x="78" y="390" class="small">D5  → HW-354 INA  → left input A</text>
+  <text x="78" y="410" class="small">D6  → HW-354 INB  → left input B</text>
+  <text x="78" y="430" class="small">D9  → HW-354 INC  → right input A</text>
+  <text x="78" y="450" class="small">D10 → HW-354 IND  → right input B</text>
+  <text x="78" y="485" class="small">D2  ← left S2, INT0, counted edge</text>
+  <text x="78" y="505" class="small">D4  ← left S1, debug only</text>
+  <text x="78" y="525" class="small">D3  ← right S2, INT1, counted edge</text>
+  <text x="78" y="545" class="small">D7  ← right S1, live signal</text>
+  <text x="78" y="580" class="small">5V → motor hall VCC pins</text>
+  <text x="78" y="600" class="small">GND → motor hall GND + driver GND</text>
+  <text x="78" y="625" class="tiny">Status: right D3/S2 is dead; only D7/S1 produces pulses</text>
+  <text x="78" y="641" class="tiny">after signal-wire swaps.</text>
+
+  <rect x="55" y="690" width="375" height="150" class="warn"/>
+  <text x="78" y="720" class="label">Wiring cautions</text>
+  <text x="78" y="746" class="small">• Do not power motors from Arduino 5 V.</text>
+  <text x="78" y="768" class="small">• Do not feed motor battery into Nano 5V/VIN.</text>
+  <text x="78" y="790" class="small">• D0/D1 are USB serial; leave unused.</text>
+  <text x="78" y="812" class="small">• Pi GPIO is not 5 V tolerant; keep encoder</text>
+  <text x="91" y="830" class="small">signals on Nano unless level-shifted.</text>
+
+  <rect x="55" y="885" width="375" height="168" class="note"/>
+  <text x="78" y="915" class="label">Motor connector interpretation</text>
+  <text x="78" y="942" class="small">Motor pins, left to right:</text>
+  <text x="78" y="964" class="small">M+  M−  GND  VCC  S1  S2</text>
+  <text x="78" y="994" class="small">M+/M− go only to MX1508 outputs.</text>
+  <text x="78" y="1016" class="small">GND/VCC/S1/S2 are hall encoder wiring.</text>
+  <text x="78" y="1038" class="small">Hall VCC is Arduino 5 V, not motor VCC.</text>
+
+  <!-- Legend -->
+  <g transform="translate(1040,730)">
+    <text x="0" y="0" class="label">Wire legend</text>
+    <line x1="0" y1="26" x2="65" y2="26" class="ctrl"/><text x="82" y="30" class="small">motor PWM/control</text>
+    <line x1="0" y1="56" x2="65" y2="56" class="enc"/><text x="82" y="60" class="small">encoder/hall signal</text>
+    <line x1="0" y1="86" x2="65" y2="86" class="v5"/><text x="82" y="90" class="small">Arduino 5 V hall supply</text>
+    <line x1="0" y1="116" x2="65" y2="116" class="gnd"/><text x="82" y="120" class="small">common ground</text>
+    <line x1="0" y1="146" x2="65" y2="146" class="motorv"/><text x="82" y="150" class="small">motor power</text>
+    <line x1="0" y1="176" x2="65" y2="176" class="usb"/><text x="82" y="180" class="small">USB</text>
+  </g>
+</svg>

@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+
+# ROS 2 workspace build artifacts
+ros2_ws/build/
+ros2_ws/install/
+ros2_ws/log/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Bags, downloaded OS images, and generated map outputs
+*.bag
+*.db3
+bags/
+bags-from-robot/
+images/
+old-sd-recovered/
+maps/*.pgm
+maps/*.png
+
+# Local secrets/config
+.env
+wifi-secrets.*
+*.local.yaml

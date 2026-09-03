@@ -1,0 +1,201 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1150" viewBox="0 0 1700 1150">
+  <title>SLAM robot power-system electrical schematic</title>
+  <desc>Electrical power topology for battery, Raspberry Pi, Arduino Nano, motor driver, motors, encoders, and lidar. Schematic topology, not a physical layout.</desc>
+  <defs>
+    <marker id="arrowPower" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#333"/>
+    </marker>
+    <style><![CDATA[
+      .title { font: 700 24px Arial, sans-serif; fill: #111; }
+      .subtitle { font: 13px Arial, sans-serif; fill: #333; }
+      .label { font: 700 12px Arial, sans-serif; fill: #111; }
+      .small { font: 10.5px Arial, sans-serif; fill: #333; }
+      .tiny { font: 9.5px Arial, sans-serif; fill: #333; }
+      .block { fill: #f7f9fb; stroke: #263238; stroke-width: 1.6; rx: 10; ry: 10; }
+      .planned { fill: #fff8e1; stroke: #e08200; stroke-width: 1.6; stroke-dasharray: 7 4; rx: 10; ry: 10; }
+      .danger { fill: #ffebee; stroke: #b71c1c; stroke-width: 1.6; rx: 10; ry: 10; }
+      .vbat { stroke: #c62828; stroke-width: 5; fill: none; }
+      .motorv { stroke: #ef6c00; stroke-width: 4.5; fill: none; }
+      .v5 { stroke: #1565c0; stroke-width: 4; fill: none; }
+      .gnd { stroke: #111; stroke-width: 4; fill: none; }
+      .signal { stroke: #2e7d32; stroke-width: 2.2; fill: none; stroke-dasharray: 6 4; }
+      .usb { stroke: #6a1b9a; stroke-width: 3.2; fill: none; }
+      .thin { stroke: #555; stroke-width: 1.2; fill: none; }
+      .buslabel { font: 700 11px Arial, sans-serif; }
+      .red { fill: #c62828; }
+      .orange { fill: #ef6c00; }
+      .blue { fill: #1565c0; }
+      .green { fill: #2e7d32; }
+      .purple { fill: #6a1b9a; }
+    ]]></style>
+  </defs>
+
+  <text x="40" y="38" class="title">SLAM robot electrical power-system schematic</text>
+  <text x="40" y="62" class="subtitle">Power topology based on the current 2S LiPo plan and purchased parts. This is an electrical schematic, so component boxes and wire lengths are not physical scale.</text>
+  <text x="40" y="82" class="subtitle">All black ground connections are common. Route motor current separately from Raspberry Pi / Arduino 5 V wiring where practical.</text>
+
+  <!-- Main battery chain -->
+  <rect x="50" y="140" width="190" height="96" class="block"/>
+  <text x="76" y="168" class="label">2S LiPo battery</text>
+  <text x="72" y="190" class="small">7.4 V nominal, 8.4 V full</text>
+  <text x="72" y="208" class="small">3000 mAh, XT60</text>
+  <text x="65" y="231" class="tiny">bought; charge in LiPo bag</text>
+  <text x="62" y="154" class="buslabel red">+</text>
+  <text x="62" y="226" class="buslabel">−</text>
+
+  <rect x="300" y="154" width="120" height="68" class="block"/>
+  <text x="327" y="181" class="label">Fuse</text>
+  <text x="318" y="201" class="small">inline holder</text>
+  <text x="318" y="216" class="tiny">10 A supplied</text>
+
+  <rect x="475" y="154" width="140" height="68" class="planned"/>
+  <text x="505" y="181" class="label">Main switch</text>
+  <text x="508" y="202" class="small">still needed</text>
+  <text x="500" y="217" class="tiny">DC-rated</text>
+
+  <rect x="675" y="130" width="180" height="112" class="planned"/>
+  <text x="706" y="160" class="label">Distribution</text>
+  <text x="703" y="181" class="small">terminal block /</text>
+  <text x="717" y="198" class="small">star wiring</text>
+  <text x="710" y="224" class="small">still needed</text>
+  <circle cx="688" cy="174" r="5" fill="#c62828"/>
+  <circle cx="688" cy="220" r="5" fill="#111"/>
+
+  <!-- Motor branch -->
+  <rect x="915" y="130" width="190" height="88" class="planned"/>
+  <text x="942" y="158" class="label">Motor enable /</text>
+  <text x="949" y="176" class="label">E-stop switch</text>
+  <text x="955" y="198" class="small">recommended</text>
+
+  <rect x="1165" y="105" width="230" height="178" class="block"/>
+  <text x="1204" y="134" class="label">HW-354 / MX1508</text>
+  <text x="1216" y="154" class="small">dual motor driver</text>
+  <text x="1191" y="180" class="small">VCC: 2–10 V motor power</text>
+  <text x="1191" y="198" class="small">logic inputs from Arduino</text>
+  <text x="1191" y="216" class="small">GND common with system</text>
+  <text x="1191" y="244" class="tiny">Add 1000 µF, 16/25 V across VCC/GND</text>
+  <circle cx="1178" cy="158" r="5" fill="#ef6c00"/>
+  <circle cx="1178" cy="260" r="5" fill="#111"/>
+
+  <rect x="1460" y="95" width="190" height="76" class="block"/>
+  <text x="1506" y="122" class="label">Left motor</text>
+  <text x="1482" y="143" class="small">left track drive motor</text>
+  <text x="1491" y="160" class="tiny">rear wheel driven</text>
+
+  <rect x="1460" y="205" width="190" height="76" class="block"/>
+  <text x="1502" y="232" class="label">Right motor</text>
+  <text x="1480" y="253" class="small">right track drive motor</text>
+  <text x="1490" y="270" class="tiny">front wheel driven</text>
+
+  <!-- 5 V branch -->
+  <rect x="900" y="405" width="200" height="116" class="block"/>
+  <text x="937" y="435" class="label">Mini560-5V buck</text>
+  <text x="933" y="457" class="small">6–30 V input</text>
+  <text x="930" y="475" class="small">5.0–5.1 V output</text>
+  <text x="921" y="500" class="tiny">thermal/load test needed</text>
+  <circle cx="913" cy="450" r="5" fill="#c62828"/>
+  <circle cx="1088" cy="450" r="5" fill="#1565c0"/>
+  <circle cx="913" cy="500" r="5" fill="#111"/>
+  <circle cx="1088" cy="500" r="5" fill="#111"/>
+
+  <rect x="1190" y="385" width="235" height="128" class="block"/>
+  <text x="1243" y="414" class="label">Raspberry Pi 4</text>
+  <text x="1225" y="436" class="small">5 V via USB-C pigtail</text>
+  <text x="1225" y="454" class="small">ROS 2 computer / Wi-Fi</text>
+  <text x="1225" y="472" class="small">USB serial to Arduino</text>
+  <text x="1225" y="490" class="small">USB adapter to lidar</text>
+
+  <rect x="1190" y="590" width="235" height="120" class="block"/>
+  <text x="1245" y="619" class="label">Arduino Nano</text>
+  <text x="1222" y="641" class="small">powered/programmed by Pi USB</text>
+  <text x="1222" y="659" class="small">motor PWM + encoder counts</text>
+  <text x="1222" y="677" class="small">5 V logic / ATmega328P</text>
+
+  <rect x="1460" y="390" width="190" height="118" class="block"/>
+  <text x="1511" y="418" class="label">2D lidar</text>
+  <text x="1487" y="440" class="small">5 V power provisional</text>
+  <text x="1484" y="458" class="small">TTL serial via Pi adapter</text>
+  <text x="1484" y="476" class="tiny">do not use MAX3232 RS232 side</text>
+  <text x="1484" y="494" class="tiny">rotation control TBD</text>
+
+  <rect x="1460" y="590" width="190" height="120" class="block"/>
+  <text x="1504" y="619" class="label">Motor encoders</text>
+  <text x="1485" y="641" class="small">Hall sensors in motors</text>
+  <text x="1485" y="659" class="small">5 V from Arduino</text>
+  <text x="1485" y="677" class="small">S1/S2 to Nano</text>
+  <text x="1485" y="695" class="tiny">right S2/D3 dead; direction from motor command</text>
+
+  <!-- Main positive and ground chain -->
+  <path d="M 240 174 L 300 174" class="vbat"/>
+  <path d="M 420 174 L 475 174" class="vbat"/>
+  <path d="M 615 174 L 675 174" class="vbat"/>
+  <path d="M 240 220 L 675 220" class="gnd"/>
+  <text x="355" y="247" class="buslabel">common 0 V / GND</text>
+
+  <!-- Branches from distribution -->
+  <path d="M 855 174 L 915 174" class="motorv"/>
+  <path d="M 1105 174 L 1165 174" class="motorv"/>
+  <text x="918" y="122" class="buslabel orange">motor V+ branch</text>
+
+  <path d="M 855 174 L 875 174 L 875 450 L 900 450" class="vbat"/>
+  <text x="805" y="335" class="buslabel red">battery V+ to buck input</text>
+
+  <path d="M 855 220 L 875 220 L 875 500 L 900 500" class="gnd"/>
+  <path d="M 855 220 L 1125 220 L 1125 260 L 1165 260" class="gnd"/>
+
+  <!-- Motor outputs -->
+  <path d="M 1395 132 L 1460 132" class="motorv"/>
+  <path d="M 1395 242 L 1460 242" class="motorv"/>
+  <text x="1408" y="121" class="tiny">OUT1/OUT2</text>
+  <text x="1408" y="231" class="tiny">OUT3/OUT4</text>
+
+  <!-- 5 V outputs -->
+  <path d="M 1100 450 L 1190 450" class="v5"/>
+  <path d="M 1100 450 L 1135 450 L 1135 335 L 1488 335 L 1488 390" class="v5"/>
+  <path d="M 1100 500 L 1190 500" class="gnd"/>
+  <path d="M 1100 500 L 1148 500 L 1148 350 L 1518 350 L 1518 508" class="gnd"/>
+  <text x="1115" y="438" class="buslabel blue">regulated 5 V</text>
+  <text x="1245" y="328" class="buslabel blue">provisional 5 V/GND to lidar</text>
+
+  <!-- USB and signal links -->
+  <path d="M 1308 513 L 1308 590" class="usb" marker-end="url(#arrowPower)"/>
+  <text x="1322" y="557" class="buslabel purple">USB</text>
+
+  <path d="M 1190 648 C 1090 630, 1082 280, 1165 198" class="signal" marker-end="url(#arrowPower)"/>
+  <text x="984" y="616" class="buslabel green">Arduino PWM control to driver</text>
+
+  <path d="M 1425 650 L 1460 650" class="signal" marker-end="url(#arrowPower)"/>
+  <path d="M 1460 675 L 1425 675" class="signal" marker-end="url(#arrowPower)"/>
+  <text x="1417" y="638" class="buslabel green">encoder S1/S2</text>
+  <text x="1402" y="692" class="buslabel green">5 V/GND</text>
+
+  <path d="M 1425 450 L 1460 450" class="signal" marker-end="url(#arrowPower)"/>
+  <text x="1388" y="376" class="buslabel green">lidar serial via Pi USB adapter</text>
+
+  <!-- Capacitor symbol near driver input -->
+  <line x1="1138" y1="174" x2="1138" y2="260" class="thin"/>
+  <line x1="1128" y1="195" x2="1148" y2="195" stroke="#555" stroke-width="2"/>
+  <line x1="1128" y1="207" x2="1148" y2="207" stroke="#555" stroke-width="2"/>
+  <text x="1082" y="198" class="tiny">1000 µF</text>
+  <text x="1082" y="214" class="tiny">16/25 V</text>
+
+  <!-- Legend -->
+  <g transform="translate(55,810)">
+    <text x="0" y="0" class="label">Wire colour legend</text>
+    <line x1="0" y1="25" x2="60" y2="25" class="vbat"/><text x="75" y="29" class="small">battery positive / fused positive</text>
+    <line x1="0" y1="55" x2="60" y2="55" class="motorv"/><text x="75" y="59" class="small">motor-power branch</text>
+    <line x1="0" y1="85" x2="60" y2="85" class="v5"/><text x="75" y="89" class="small">regulated 5 V branch</text>
+    <line x1="0" y1="115" x2="60" y2="115" class="gnd"/><text x="75" y="119" class="small">common ground</text>
+    <line x1="0" y1="145" x2="60" y2="145" class="signal"/><text x="75" y="149" class="small">logic/data/control</text>
+    <line x1="0" y1="175" x2="60" y2="175" class="usb"/><text x="75" y="179" class="small">USB cable</text>
+  </g>
+
+  <rect x="560" y="800" width="1040" height="160" class="danger"/>
+  <text x="585" y="830" class="label">Safety / accuracy notes</text>
+  <text x="585" y="856" class="small">• HW-354/MX1508 motor VCC must stay within its expected 2–10 V range. Do not connect 12 V directly.</text>
+  <text x="585" y="878" class="small">• Ordered fuse holder includes a 10 A fuse; prefer 5 A or 7.5 A for first battery tests if available.</text>
+  <text x="585" y="900" class="small">• Mini560 and USB-C pigtail must be load-tested for Raspberry Pi undervoltage before relying on them.</text>
+  <text x="585" y="922" class="small">• Lidar power/data wiring is provisional until the exact module interface and voltage levels are confirmed.</text>
+  <text x="585" y="944" class="small">• Electrical schematic is topological; component boxes and wire lengths are intentionally not drawn to physical scale.</text>
+</svg>

@@ -1,0 +1,118 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="slamrobot">
+  <!--
+    Provisional tracked robot description.
+
+    Coordinate convention:
+      x forward, y left, z up.
+      base_footprint is on the floor at the approximate centre of rotation.
+      base_link is above it at the assumed centre-platform centre height.
+
+    Main track dimensions are initial measured values from the hardware
+    inventory. Platform and lidar dimensions are provisional assumptions until
+    the platform/lidar mount is built. Odometry still needs floor calibration
+    because tracked/skid-steer robots slip, especially while turning.
+  -->
+
+  <xacro:arg name="track_separation" default="0.155" />
+  <xacro:arg name="track_contact_length" default="0.127" />
+  <xacro:arg name="track_overall_length" default="0.185" />
+  <xacro:arg name="track_width" default="0.042" />
+  <xacro:arg name="track_height" default="0.058" />
+  <xacro:arg name="chassis_length" default="0.170" />
+  <xacro:arg name="chassis_width" default="0.095" />
+  <xacro:arg name="chassis_height" default="0.003" />
+  <xacro:arg name="base_link_z" default="0.0445" />
+  <xacro:arg name="lidar_x" default="0.0" />
+  <xacro:arg name="lidar_y" default="0.0" />
+  <xacro:arg name="lidar_z" default="0.0555" />
+  <xacro:arg name="lidar_yaw" default="0.0" />
+
+  <material name="chassis_dark">
+    <color rgba="0.10 0.10 0.10 1.0" />
+  </material>
+  <material name="track_black">
+    <color rgba="0.01 0.01 0.01 1.0" />
+  </material>
+  <material name="lidar_blue">
+    <color rgba="0.1 0.3 0.8 1.0" />
+  </material>
+
+  <link name="base_footprint" />
+
+  <joint name="base_footprint_to_base_link" type="fixed">
+    <parent link="base_footprint" />
+    <child link="base_link" />
+    <origin xyz="0 0 $(arg base_link_z)" rpy="0 0 0" />
+  </joint>
+
+  <link name="base_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="$(arg chassis_length) $(arg chassis_width) $(arg chassis_height)" />
+      </geometry>
+      <material name="chassis_dark" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <box size="$(arg chassis_length) $(arg chassis_width) $(arg chassis_height)" />
+      </geometry>
+    </collision>
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <mass value="0.6" />
+      <inertia ixx="0.004" ixy="0" ixz="0" iyy="0.006" iyz="0" izz="0.008" />
+    </inertial>
+  </link>
+
+  <xacro:macro name="track" params="name y">
+    <link name="${name}">
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <box size="$(arg track_overall_length) $(arg track_width) $(arg track_height)" />
+        </geometry>
+        <material name="track_black" />
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <geometry>
+          <box size="$(arg track_overall_length) $(arg track_width) $(arg track_height)" />
+        </geometry>
+      </collision>
+    </link>
+    <joint name="base_link_to_${name}" type="fixed">
+      <parent link="base_link" />
+      <child link="${name}" />
+      <origin xyz="0 ${y} -0.0155" rpy="0 0 0" />
+    </joint>
+  </xacro:macro>
+
+  <!-- Track y offsets use the measured/derived 0.155 m centre-to-centre track separation. -->
+  <xacro:track name="left_track_link" y="0.0775" />
+  <xacro:track name="right_track_link" y="-0.0775" />
+
+  <link name="lidar_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <cylinder radius="0.035" length="0.035" />
+      </geometry>
+      <material name="lidar_blue" />
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0" />
+      <geometry>
+        <cylinder radius="0.035" length="0.035" />
+      </geometry>
+    </collision>
+  </link>
+
+  <joint name="base_link_to_lidar_link" type="fixed">
+    <parent link="base_link" />
+    <child link="lidar_link" />
+    <origin xyz="$(arg lidar_x) $(arg lidar_y) $(arg lidar_z)" rpy="0 0 $(arg lidar_yaw)" />
+  </joint>
+</robot>

@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>slam_robot_smoke_test</name>
+  <version>0.0.1</version>
+  <description>Minimal ROS 2 smoke-test package for validating the slam-robot build/deploy loop.</description>
+  <maintainer email="tom@example.com">Tom</maintainer>
+  <license>MIT</license>
+
+  <depend>rclpy</depend>
+  <depend>std_msgs</depend>
+
+  <test_depend>ament_lint_auto</test_depend>
+  <test_depend>ament_lint_common</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

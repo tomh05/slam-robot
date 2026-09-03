@@ -1,0 +1,43 @@
+arduino_base_node:
+  ros__parameters:
+    port: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
+    baud: 115200
+
+    odom_frame_id: odom
+    base_frame_id: base_link
+
+    # Initial measured mechanical values from hardware inventory.
+    # track_width_m is the centre-to-centre distance between left/right track contact patches.
+    track_width_m: 0.155
+    wheel_radius_m: 0.029
+
+    # Provisional encoder characterisation from manual one-output-wheel-rev tests.
+    # Legacy shared values remain as fallback; side-specific values below take precedence.
+    #
+    # Direction is now inferred from the motor's commanded direction in the
+    # Arduino firmware (single-channel tachometer workaround for right encoder
+    # hardware fault). The *_encoder_sign parameters below apply to the
+    # firmware-reported signed counts for fine calibration only.
+    ticks_per_rev: 360.0
+    ticks_per_meter: 0.0
+    left_ticks_per_rev: 224.0
+    right_ticks_per_rev: 150.0
+    left_ticks_per_meter: 0.0
+    right_ticks_per_meter: 0.0
+
+    left_encoder_sign: -1.0
+    right_encoder_sign: 1.0
+    left_command_sign: 1.0
+    right_command_sign: 1.0
+
+    max_linear_mps: 0.20
+    max_angular_rps: 1.0
+    max_target_tps: 250.0
+    cmd_vel_timeout_s: 0.5
+    command_rate_hz: 20.0
+    serial_read_rate_hz: 100.0
+    publish_tf: true
+
+    # Safety default: do not move motors until explicitly enabled.
+    motors_enabled: false
+    send_zero_when_disabled: true
