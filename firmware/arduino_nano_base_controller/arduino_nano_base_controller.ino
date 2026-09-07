@@ -46,8 +46,8 @@
 // All selected pins support PWM on classic Nano.
 const uint8_t LEFT_PWM_A = 9;   // HW-354 INA
 const uint8_t LEFT_PWM_B = 10;   // HW-354 INB
-const uint8_t RIGHT_PWM_A = 5;  // HW-354 INC
-const uint8_t RIGHT_PWM_B = 6; // HW-354 IND
+const uint8_t RIGHT_PWM_A = 6;  // HW-354 INC
+const uint8_t RIGHT_PWM_B = 5; // HW-354 IND
 
 // Encoder/hall inputs, matching the existing board pinout.
 // Both encoders have a hardware fault: only S1 produces pulses, S2 is dead.
