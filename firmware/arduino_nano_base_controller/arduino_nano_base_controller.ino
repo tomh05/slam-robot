@@ -16,7 +16,7 @@
       R\n      # report raw encoder pin levels and transition counts, useful during pinout testing
 
     Arduino -> Pi, periodic:
-      E <millis> <left_count> <right_count> <left_tps> <right_tps> <left_pwm> <right_pwm>\n
+      E <millis> <left_position> <right_position> <left_tps> <right_tps> <left_pwm> <right_pwm>\n
       R <millis> <left_s1> <left_s2> <right_s1> <right_s2> <left_s1_edges> <left_s2_edges> <right_s1_edges> <right_s2_edges>\n
 
   Safety:
@@ -25,11 +25,15 @@
 
   Notes:
     - Encoders are used as single-channel (x1) tachometers only.
-    - The right encoder has a hardware fault: only one of its two signal wires (S1/S2)
-      is producing pulses. Direction cannot be determined from hardware.
-    - Instead, direction is inferred from the commanded motor direction: the ISR counts
-      every rising edge on S2 as +1, and the control loop negates the tick delta when
-      the previous PWM command was negative.
+    - The right encoder has a hardware fault: only one of its two signal wires
+      (S1/S2) produces pulses. Direction cannot be determined from hardware.
+    - The left encoder counts on S2 (D2/INT0); the right encoder counts on S1
+      (D7) via a pin-change interrupt because its S2 (D3) signal is dead.
+    - Direction is inferred from the commanded motor direction: the ISR counts
+      every rising edge as +1, and the control loop negates the tick delta when
+      the target velocity command is negative. The direction-corrected deltas are
+      accumulated into signed left_position/right_position values, which are
+      reported in the E line so the Pi receives correct direction information.
     - This means distance is accurate but the robot cannot detect slip or unexpected
       direction changes from the encoders alone.
     - PID gains are deliberately conservative placeholders.
@@ -46,15 +50,20 @@ const uint8_t RIGHT_IN_A = 9;  // HW-354 INC
 const uint8_t RIGHT_IN_B = 10; // HW-354 IND
 
 // Encoder/hall inputs, matching the existing board pinout.
-// On a classic Nano, D2/D3 are the external interrupt pins, so S2 is the
-// counted channel. S1 is no longer read for direction (right encoder hardware
-// fault: only one signal wire produces pulses), but the pin definition is
-// retained so raw edge counters in the R response can still be used for
-// debugging.
-const uint8_t LEFT_ENC_S1 = 4;    // Motor A S1 (unused for direction)
+// The right encoder has a hardware fault: its S2 signal (wired to D3/INT1) is
+// dead. Only S1 (wired to D7) produces pulses. Since D7 is not an external
+// interrupt pin on the Nano, the right encoder is counted via a pin-change
+// interrupt (PCINT2 group, PCINT23). The left encoder S2 on D2/INT0 works and
+// keeps using the external interrupt.
+//
+// Both encoders are used as single-channel (x1) tachometers: only distance
+// (magnitude) comes from the encoder step count. Direction (forward/backward)
+// is inferred from the commanded motor direction (target velocity sign) in the control
+// loop, as the hardware cannot provide it.
+const uint8_t LEFT_ENC_S1 = 4;    // Motor A S1 (debug only)
 const uint8_t LEFT_ENC_S2 = 2;    // Motor A S2, INT0 counted channel
-const uint8_t RIGHT_ENC_S1 = 7;   // Motor B S1 (unused for direction)
-const uint8_t RIGHT_ENC_S2 = 3;   // Motor B S2, INT1 counted channel
+const uint8_t RIGHT_ENC_S1 = 7;   // Motor B S1 — LIVE channel, counted via PCINT2
+const uint8_t RIGHT_ENC_S2 = 3;   // Motor B S2 — DEAD channel, debug only
 
 // ---------------- Configuration ----------------
 
@@ -79,8 +88,15 @@ float KD = 0.0f;
 
 // ---------------- State ----------------
 
+// Raw ISR tick accumulators (always positive — magnitude only).
 volatile long left_count = 0;
 volatile long right_count = 0;
+
+// Signed positions maintained by the control loop. These accumulate the
+// direction-corrected tick deltas and are reported in the E line so the ROS
+// node receives correctly-signed positions for odometry.
+volatile long left_position = 0;
+volatile long right_position = 0;
 
 long last_left_count = 0;
 long last_right_count = 0;
@@ -122,8 +138,14 @@ void leftEncoderIsr() {
   left_count++;
 }
 
-void rightEncoderIsr() {
-  right_count++;
+// Right encoder: the live signal is on D7 (PD7 / PCINT23), which is not an
+// external interrupt pin on the Nano. We use a pin-change interrupt (PCINT2
+// group). The ISR fires on both edges; we only count rising edges to match
+// the left encoder's RISING behaviour.
+ISR(PCINT2_vect) {
+  if (PIND & _BV(PD7)) {
+    right_count++;
+  }
 }
 
 // ---------------- Motor output ----------------
@@ -291,11 +313,17 @@ void controlLoop() {
   last_left_count = left_now;
   last_right_count = right_now;
 
-  // Encoder is single-channel (counts only up). Direction is inferred from the
-  // commanded motor direction: negate the delta when the previous PWM was
-  // negative so the PID and reported tps have the correct polarity.
-  if (left_pwm < 0) left_delta = -left_delta;
-  if (right_pwm < 0) right_delta = -right_delta;
+  // Encoder is single-channel (counts only up, magnitude only). Direction is
+  // inferred from the commanded motor direction: negate the delta when the target
+  // velocity is negative so the PID and reported tps have the correct polarity.
+  if (left_target_tps < 0) left_delta = -left_delta;
+  if (right_target_tps < 0) right_delta = -right_delta;
+
+  // Accumulate the direction-corrected delta into a signed position that is
+  // reported to the Pi. Without this, the E line would carry always-positive
+  // counts and the ROS node could not tell forward from backward.
+  left_position += left_delta;
+  right_position += right_delta;
 
   float dt_s = elapsed_ms / 1000.0f;
   if (dt_s <= 0.0f) {
@@ -315,6 +343,8 @@ void zeroEncoders() {
   noInterrupts();
   left_count = 0;
   right_count = 0;
+  left_position = 0;
+  right_position = 0;
   interrupts();
 
   last_left_count = 0;
@@ -372,8 +402,8 @@ void reportStatus() {
   long left_now;
   long right_now;
   noInterrupts();
-  left_now = left_count;
-  right_now = right_count;
+  left_now = left_position;
+  right_now = right_position;
   interrupts();
 
   Serial.print(F("E "));
@@ -421,7 +451,14 @@ void setup() {
   last_right_s2_level = digitalRead(RIGHT_ENC_S2);
 
   attachInterrupt(digitalPinToInterrupt(LEFT_ENC_S2), leftEncoderIsr, RISING);
-  attachInterrupt(digitalPinToInterrupt(RIGHT_ENC_S2), rightEncoderIsr, RISING);
+  // Right encoder: D7 is not an external interrupt pin, so use a pin-change
+  // interrupt on PCINT2 (PD0-PD7 group). Enable only PCINT23 (PD7 = D7).
+  // NOTE: D0/D1 carry serial traffic, so PCINT2_vect also fires during UART
+  // RX, but the ISR only checks PD7, so it is harmless — just minor ISR overhead
+  // during serial bursts, negligible for a slow tracked robot.
+  PCICR |= _BV(PCIE2);
+  PCMSK2 |= _BV(PCINT23);
+  PCIFR |= _BV(PCIF2); // clear any pending flag
 
   Serial.begin(SERIAL_BAUD);
   last_control_ms = millis();

@@ -16,8 +16,18 @@ arduino_base_node:
     #
     # Direction is now inferred from the motor's commanded direction in the
     # Arduino firmware (single-channel tachometer workaround for right encoder
-    # hardware fault). The *_encoder_sign parameters below apply to the
-    # firmware-reported signed counts for fine calibration only.
+    # hardware fault). The firmware reports signed positions (positive for
+    # forward, negative for backward) based on the V command sign.
+    #
+    # Calibration:
+    # 1. Set LEFT_MOTOR_SIGN / RIGHT_MOTOR_SIGN in the firmware so that
+    #    positive PWM = physical forward for each motor.
+    # 2. With both motors_enabled and command_sign = 1.0, command forward motion
+    #    (positive linear.x) and verify that BOTH left_position and right_position
+    #    increase in the E status lines.
+    # 3. If a wheel's position moves the wrong way, set its *_encoder_sign to -1.0
+    #    as a fine-calibration flip. Do NOT use *_encoder_sign as a primary
+    #    direction fix — fix motor wiring/sign in the firmware first.
     ticks_per_rev: 360.0
     ticks_per_meter: 0.0
     left_ticks_per_rev: 224.0
@@ -25,7 +35,7 @@ arduino_base_node:
     left_ticks_per_meter: 0.0
     right_ticks_per_meter: 0.0
 
-    left_encoder_sign: -1.0
+    left_encoder_sign: 1.0
     right_encoder_sign: 1.0
     left_command_sign: 1.0
     right_command_sign: 1.0

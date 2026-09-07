@@ -175,17 +175,17 @@ from the motor's commanded direction in the firmware.
 |---|---:|---|
 | Left/Motor A encoder `S1` | D4 | retained for debugging only |
 | Left/Motor A encoder `S2` | D2 | external interrupt INT0, counted channel |
-| Right/Motor B encoder `S1` | D7 | currently the only live right encoder signal |
-| Right/Motor B encoder `S2` | D3 | external interrupt INT1, but right `S2` wire is dead |
+| Right/Motor B encoder `S1` | D7 | live right encoder signal, counted via PCINT2 pin-change interrupt |
+| Right/Motor B encoder `S2` | D3 | dead channel, debug only |
 
-The ISR counts every rising edge on `S2` as +1. The firmware negates the tick
-delta when the previous PWM command was negative, so the PID and reported tps
-have the correct sign. D2/D3 are the classic Nano's two external interrupt
-pins, which is almost certainly why the existing board routes one encoder
-channel per motor there.
+The ISR counts every rising edge as +1 (magnitude only). The firmware negates
+the tick delta when the commanded target velocity is negative, so the PID and
+reported tps have the correct sign. Direction-corrected deltas are accumulated
+into signed `left_position`/`right_position` values, reported in the E line.
 
-If the right encoder wire is on D7 instead of D3, either swap the wires at the
-Arduino or change the firmware to attach the right ISR to D7.
+The left encoder `S2` (D2/INT0) is the live left channel and uses the external
+interrupt. The right encoder `S2` (D3/INT1) is dead; the live right signal is
+on `S1` (D7), which is counted via a pin-change interrupt (PCINT2/PCINT23).
 
 ### Serial
 

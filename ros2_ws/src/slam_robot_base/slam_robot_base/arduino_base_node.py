@@ -37,7 +37,11 @@ class ArduinoBaseNode(Node):
         V <left_ticks_per_sec> <right_ticks_per_sec>\n
     and emits periodic status:
 
-        E <millis> <left_count> <right_count> <left_tps> <right_tps> <left_pwm> <right_pwm>\n
+        E <millis> <left_position> <right_position> <left_tps> <right_tps> <left_pwm> <right_pwm>\n
+
+    The firmware reports signed positions (positive for forward, negative for
+    backward) with direction inferred from the target velocity sign. The ROS
+    node applies static left_encoder_sign / right_encoder_sign for calibration.
     This node deliberately defaults to motors_enabled=False. In that mode it
     still opens the serial port and publishes Arduino status, but it sends safe
     stop/zero commands regardless of /cmd_vel. Set motors_enabled:=true only

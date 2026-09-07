@@ -10,8 +10,14 @@ Manual testing on 2026-07-28 revealed that the **right encoder only produces pul
 Because the hardware fault is not trivial to repair (likely a damaged hall sensor or broken wire inside the motor assembly), the decision was made to **use both encoders as single-channel (x1) tachometers for distance measurement only**. Direction is inferred from the motor's commanded direction as set by the speed controller.
 
 This means:
-- Encoder counts are **always positive** in the hardware ISR.
-- The firmware negates the tick delta when the previous PWM command was negative, so the PID and reported tps have the correct sign.
+- Encoder counts are **always positive** in the hardware ISR (magnitude only).
+- Direction is inferred from the commanded motor velocity (`target_tps` sign):
+  the firmware negates the tick delta when the target velocity is negative, so the
+  PID and reported tps have the correct sign.
+- The direction-corrected deltas are accumulated into **signed positions**
+  (`left_position` / `right_position`) which are reported in the `E` line to the Pi.
+- The Pi receives correctly-signed positions and can integrate odometry with
+  proper forward/backward distinction.
 - Distance integration is correct under normal operation (no slip or unexpected reversal).
 - The robot **cannot detect slip** or unexpected motor direction from encoders alone.
 
@@ -70,10 +76,15 @@ firmware/arduino_nano_base_controller/arduino_nano_base_controller.ino
 
 Current encoder behaviour:
 
-- `S2` is counted on `RISING` only (D2 for left, D3 for right).
+- **Left encoder**: `S2` is counted on `RISING` via INT0 on D2. The ISR always increments by +1.
+- **Right encoder**: `S1` is counted on `RISING` via a pin-change interrupt (PCINT2 / PCINT23) on D7.
+  The right encoder's `S2` channel (D3/INT1) is dead and not used for counting.
 - The ISR always increments the count by +1 — there is no direction pin read.
-- Direction is inferred in the control loop: when the previous PWM command was
-  negative, the tick delta is negated before computing measured tps.
+- Direction is inferred in the control loop from the commanded target velocity sign:
+  when `target_tps` is negative, the tick delta is negated, the PID and reported tps
+  have the correct sign, and the signed position accumulator moves backward.
+- The `E` status line reports **signed positions** (`left_position` / `right_position`),
+  not raw always-positive counts, so the Pi can distinguish forward from backward.
 - Counts can be zeroed with `Z`.
 - Raw pin levels and edge counters can be requested with `R`.
 
@@ -121,10 +132,10 @@ Expected output when spinning the right track/motor slowly by hand:
 L=       0 dL=  +0 tps=   +0 R=      11 dR=  +2 tps=  +10 pwm=(  +0,  +0)
 ```
 
-Both sides should now show **positive and negative counts** depending on the
-commanded direction, because the firmware applies sign from the PWM command.
-(When motors are stopped with `V 0 0`, direction is undefined but ticks should
-be near zero.)
+Both sides should now show **incrementing counts when spun** (since `V 0 0` means
+no direction is commanded, the firmware cannot infer sign). Direction inference
+(positive vs negative position changes) can only be verified under actual motor
+commands with `motors_enabled:=true` and non-zero `/cmd_vel`.
 
 Initial result from 2026-07-28 (single-channel mode):
 
@@ -143,18 +154,16 @@ The helper script periodically prints raw pin levels like:
 raw pins: LS1=1 LS2=0 RS1=1 RS2=1
 ```
 
-In single-channel mode, **only S2 is used for counting** (D2 left, D3 right).
-`S1` levels are still reported for debugging but are not used for direction.
+In single-channel mode, **the left encoder counts on S2/D2** (INT0) and **the
+right encoder counts on S1/D7** (pin-change interrupt, since S2/D3 is dead).
+`S1` levels for the left encoder (`LS1/D4`) and `S2` levels for the right
+encoder (`RS2/D3`) are still reported for debugging but are not used for
+counting.
 
 For the left encoder, `LS2/D2` should toggle and drive counts. For the right
 encoder, only `RS1/D7` produces pulses (the right `S2/D3` channel is known
- dead). The firmware counts rising edges on whichever S2 pin is wired, but
- for the right side the live signal is on D7, not D3.
-
-> **Note:** the current firmware ISR is attached to D3 for the right encoder.
-> If right encoder counts do not move, the right encoder signal wires may need
-> to be swapped at the Arduino (move the live wire to D3) or the firmware pin
-> mapping changed to count on D7 instead.
+dead). The firmware now counts rising edges on D7 via a pin-change interrupt,
+so right counts should move.
 
 If raw pins do not toggle:
 
@@ -175,14 +184,17 @@ For each side, record in `docs/hardware-inventory-template.md` or a test log:
 - Which way the track was moved for "forward".
 - Approximate counts per full output shaft/sprocket revolution in each direction.
   (Both directions should now produce the same magnitude of count change.)
-- Which S2 pin (D2 or D3) is the live channel for each encoder.
+- Which live pin is the live channel for each encoder:
+  D2 (S2) for left via INT0, D7 (S1) for right via PCINT2.
 - Any observed voltage levels from the logic analyser/multimeter.
 
 Counts per revolution can be measured by:
 
 1. Send `Z` or restart `scripts/arduino_encoder_test.py`.
 2. Put a tape mark on the output sprocket/wheel.
-3. Rotate exactly one output revolution by hand.
-4. Read the absolute count change.
-5. Repeat a few times in both directions.
+3. Rotate exactly one output revolution by hand **in one direction only**.
+4. Read the absolute count change (should be positive for forward).
+5. Rotate one revolution in the opposite direction.
+6. Read the absolute count change (should be negative for backward).
+7. Both directions should produce the same **magnitude** of count change.
 

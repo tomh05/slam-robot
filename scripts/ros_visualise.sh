@@ -87,25 +87,32 @@ fi
 
 # 3. Try to receive actual TF data
 echo ""
-echo "  --- Attempting to receive TF data (5s) ---"
+echo "  --- Attempting to receive TF data (10s) ---"
 TF_LINE=""
 if command -v timeout &>/dev/null; then
-    TF_LINE=$(timeout 5 ros2 topic echo /tf --no-arr 2>/dev/null | head -1 || true)
+    TF_LINE=$(timeout 10 ros2 topic echo /tf --once 2>/dev/null | head -1 || true)
 fi
 
-if [ -n "${TF_LINE}" ]; then
+if echo "${TF_LINE}" | grep -q "transforms"; then
     echo "  ✓ TF data received!"
-elif echo "${TOPICS}" | grep -q "/tf"; then
-    echo "  ~ /tf topic exists but no messages arrived in 5s."
+elif echo "${TOPICS}" | grep -qx "/tf"; then
+    echo "  ~ /tf topic exists but no messages arrived in 10s."
     echo "    The robot is discovered but may not be sending TF."
     echo "    Check that the Arduino is connected and sending status lines."
     echo "    (arduino_base_node only publishes TF when it receives 'E' lines)"
 else
-    echo "  ✗ No /tf data received."
-    echo "    Most likely: the robot is not running on ROS_DOMAIN_ID=${ROS_DOMAIN_ID}."
-    echo "    1. Kill any old robot session: pkill -f 'ros2 launch'"
-    echo "    2. Restart with: ./scripts/ros_start_no_motors.sh"
-    echo "    3. If multicast is blocked, ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-unset} handles it."
+    echo "  ✗ No /tf topic or data. The robot is NOT reachable on DDS."
+    echo "    ROS_DOMAIN_ID=${ROS_DOMAIN_ID}, ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-not set}"
+    echo ""
+    echo "    Most likely cause: the robot is still running the OLD 'ros-start'"
+    echo "    process (which did NOT forward ROS_DOMAIN_ID over SSH), so it's"
+    echo "    on the default domain 0 — not 42. You must restart it."
+    echo ""
+    echo "    1. Kill the old robot process (on the robot):"
+    echo "         ssh ${ROBOT_SSH} 'pkill -f \"ros2 launch\"'"
+    echo "    2. Start fresh with the renamed script:"
+    echo "         ./scripts/ros_start_no_motors.sh"
+    echo "    3. Re-run this visualiser."
 fi
 
 echo ""

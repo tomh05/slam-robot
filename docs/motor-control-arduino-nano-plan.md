@@ -174,7 +174,7 @@ P <kp> <ki> <kd>\n
 Periodic encoder/status report, e.g. 20-50 Hz:
 
 ```text
-E <millis> <left_count> <right_count> <left_ticks_per_sec> <right_ticks_per_sec> <left_pwm> <right_pwm>\n
+E <millis> <left_position> <right_position> <left_ticks_per_sec> <right_ticks_per_sec> <left_pwm> <right_pwm>\n
 ```
 
 Example:

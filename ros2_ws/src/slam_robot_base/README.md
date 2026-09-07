@@ -29,7 +29,7 @@ Arduino to Pi:
 
 ```text
 BOOT arduino_nano_base_controller
-E <millis> <left_count> <right_count> <left_tps> <right_tps> <left_pwm> <right_pwm>
+E <millis> <left_position> <right_position> <left_tps> <right_tps> <left_pwm> <right_pwm>
 R <millis> <left_s1> <left_s2> <right_s1> <right_s2>
 OK stop
 OK zero
@@ -75,6 +75,6 @@ These need calibration before using odometry seriously:
 - `track_width_m`
 - `wheel_radius_m`
 - `left_ticks_per_rev` / `right_ticks_per_rev`, or `left_ticks_per_meter` / `right_ticks_per_meter`
-- `left_encoder_sign` / `right_encoder_sign` — provisional manual test values are `-1.0` left and `1.0` right
+- `left_encoder_sign` / `right_encoder_sign` — fine-calibration signs applied to the firmware's already-direction-corrected signed positions. Default `1.0` for both; set to `-1.0` only if a specific motor is wired/mounted opposite to the standard convention.
 - `left_command_sign`
 - `right_command_sign`
