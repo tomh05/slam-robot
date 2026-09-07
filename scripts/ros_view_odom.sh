@@ -7,10 +7,11 @@ source "${SCRIPT_DIR}/robot_env.sh"
 
 echo "Watching /odom pose on ${ROBOT_HOST}... (Ctrl-C to stop)"
 
-ssh -t "${ROBOT_SSH}" bash -s <<'REMOTE_EOF'
+ssh -t "${ROBOT_SSH}" bash -s <<EOF
 set -e
+export ROS_DOMAIN_ID="${ROS_DOMAIN_ID}"
 source /opt/ros/jazzy/setup.bash
-source /home/ubuntu/slam-robot/ros2_ws/install/setup.bash
+source ${ROBOT_PROJECT_DIR}/ros2_ws/install/setup.bash
 
 python3 <<'PYEOF'
 import rclpy
@@ -34,4 +35,4 @@ def cb(msg: Odometry) -> None:
 node.create_subscription(Odometry, '/odom', cb, 10)
 rclpy.spin(node)
 PYEOF
-REMOTE_EOF
+EOF
