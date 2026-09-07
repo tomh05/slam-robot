@@ -25,8 +25,12 @@ This file tracks information that is still needed before implementation details 
 4. ~~What type and voltage are the encoders/hall sensors?~~ **RESOLVED**
    - Encoders are 5 V hall sensors powered from the Arduino Nano.
    - Pinout confirmed: `M+ M- GND VCC S1 S2`; left S1→D4, S2→D2/INT0; right S1→D7, S2→D3/INT1.
-   - **Hardware fault:** right encoder only produces pulses on one signal wire (D7/S1); D3/S2 is dead.
-   - **Decision:** use both encoders as single-channel (x1) tachometers for distance only; direction is inferred from the motor's commanded direction in the firmware. See `docs/encoder-bringup-test-plan.md` and `docs/current-status.md`.
+   - **Hardware fault:** both encoders only produce pulses on S1; S2 (D2/D3) is dead on both motors.
+   - **Decision:** use both encoders as single-channel (x1) tachometers for distance only;
+     direction is inferred from the motor's commanded direction (target velocity sign) in
+     the firmware. The firmware counts on S1: D4 (left) and D7 (right), both via PCINT2
+     pin-change interrupts. Signed positions are reported in the E line.
+     See `docs/encoder-bringup-test-plan.md` and `docs/current-status.md`.
    - Provisional calibration: left ≈ 224 counts/rev, right ≈ 150 counts/rev.
 
 ## Software decisions

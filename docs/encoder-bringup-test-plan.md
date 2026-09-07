@@ -5,7 +5,7 @@ produce pulses, and measure counts before powered motor testing.
 
 ## Known hardware fault
 
-Manual testing on 2026-07-28 revealed that the **right encoder only produces pulses on one of its two signal wires** (S1 or S2, but not both). After swapping wires and confirming both Arduino pins D3 and D7 work when fed the live signal, it was determined that one right encoder channel is dead or disconnected at the sensor. The left encoder is fully functional with both channels.
+Manual testing on 2026-07-28 revealed that **both encoders only produce pulses on one of their two signal wires** (S1 or S2, but not both). After swapping wires and confirming that all four Arduino pins D2, D3, D4, and D7 work when fed a live signal, it was determined that on each motor only one encoder channel is dead or disconnected at the sensor.
 
 Because the hardware fault is not trivial to repair (likely a damaged hall sensor or broken wire inside the motor assembly), the decision was made to **use both encoders as single-channel (x1) tachometers for distance measurement only**. Direction is inferred from the motor's commanded direction as set by the speed controller.
 
@@ -76,7 +76,8 @@ firmware/arduino_nano_base_controller/arduino_nano_base_controller.ino
 
 Current encoder behaviour:
 
-- **Left encoder**: `S2` is counted on `RISING` via INT0 on D2. The ISR always increments by +1.
+- **Left encoder**: `S1` is counted on `RISING` via a pin-change interrupt (PCINT2 / PCINT20) on D4.
+  The left encoder's `S2` channel (D2/INT0) is dead and not used for counting.
 - **Right encoder**: `S1` is counted on `RISING` via a pin-change interrupt (PCINT2 / PCINT23) on D7.
   The right encoder's `S2` channel (D3/INT1) is dead and not used for counting.
 - The ISR always increments the count by +1 — there is no direction pin read.
@@ -154,16 +155,13 @@ The helper script periodically prints raw pin levels like:
 raw pins: LS1=1 LS2=0 RS1=1 RS2=1
 ```
 
-In single-channel mode, **the left encoder counts on S2/D2** (INT0) and **the
-right encoder counts on S1/D7** (pin-change interrupt, since S2/D3 is dead).
-`S1` levels for the left encoder (`LS1/D4`) and `S2` levels for the right
-encoder (`RS2/D3`) are still reported for debugging but are not used for
-counting.
+In single-channel mode, **both encoders count on S1**: `LS1/D4` (PCINT2) for left
+and `RS1/D7` (PCINT2) for right. `S2` levels (`LS2/D2`, `RS2/D3`) are still
+reported for debugging but are not used for counting.
 
-For the left encoder, `LS2/D2` should toggle and drive counts. For the right
+For the left encoder, `LS1/D4` should toggle and drive counts. For the right
 encoder, only `RS1/D7` produces pulses (the right `S2/D3` channel is known
-dead). The firmware now counts rising edges on D7 via a pin-change interrupt,
-so right counts should move.
+dead). The firmware counts rising edges on D4 and D7 via pin-change interrupts.
 
 If raw pins do not toggle:
 
@@ -185,7 +183,7 @@ For each side, record in `docs/hardware-inventory-template.md` or a test log:
 - Approximate counts per full output shaft/sprocket revolution in each direction.
   (Both directions should now produce the same magnitude of count change.)
 - Which live pin is the live channel for each encoder:
-  D2 (S2) for left via INT0, D7 (S1) for right via PCINT2.
+  D4 (S1) for left via PCINT2, D7 (S1) for right via PCINT2.
 - Any observed voltage levels from the logic analyser/multimeter.
 
 Counts per revolution can be measured by:

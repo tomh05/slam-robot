@@ -25,10 +25,9 @@
 
   Notes:
     - Encoders are used as single-channel (x1) tachometers only.
-    - The right encoder has a hardware fault: only one of its two signal wires
-      (S1/S2) produces pulses. Direction cannot be determined from hardware.
-    - The left encoder counts on S2 (D2/INT0); the right encoder counts on S1
-      (D7) via a pin-change interrupt because its S2 (D3) signal is dead.
+    - Both encoders have a hardware fault: only S1 produces pulses, S2 is dead
+      on each motor. The left encoder counts on S1 (D4) and the right encoder
+      counts on S1 (D7), both via pin-change interrupts (PCINT2 group).
     - Direction is inferred from the commanded motor direction: the ISR counts
       every rising edge as +1, and the control loop negates the tick delta when
       the target velocity command is negative. The direction-corrected deltas are
@@ -50,18 +49,17 @@ const uint8_t RIGHT_IN_A = 9;  // HW-354 INC
 const uint8_t RIGHT_IN_B = 10; // HW-354 IND
 
 // Encoder/hall inputs, matching the existing board pinout.
-// The right encoder has a hardware fault: its S2 signal (wired to D3/INT1) is
-// dead. Only S1 (wired to D7) produces pulses. Since D7 is not an external
-// interrupt pin on the Nano, the right encoder is counted via a pin-change
-// interrupt (PCINT2 group, PCINT23). The left encoder S2 on D2/INT0 works and
-// keeps using the external interrupt.
+// Both encoders have a hardware fault: only S1 produces pulses, S2 is dead.
+// The left encoder counts on S1 (D4 / PD4 / PCINT20).
+// The right encoder counts on S1 (D7 / PD7 / PCINT23).
+// Both D4 and D7 are on port D and share the PCINT2 pin-change interrupt group.
 //
 // Both encoders are used as single-channel (x1) tachometers: only distance
 // (magnitude) comes from the encoder step count. Direction (forward/backward)
-// is inferred from the commanded motor direction (target velocity sign) in the control
-// loop, as the hardware cannot provide it.
-const uint8_t LEFT_ENC_S1 = 4;    // Motor A S1 (debug only)
-const uint8_t LEFT_ENC_S2 = 2;    // Motor A S2, INT0 counted channel
+// is inferred from the commanded motor direction (target velocity sign) in the
+// control loop, as the hardware cannot provide it.
+const uint8_t LEFT_ENC_S1 = 4;    // Motor A S1 — LIVE channel, counted via PCINT2
+const uint8_t LEFT_ENC_S2 = 2;    // Motor A S2 — DEAD channel, debug only
 const uint8_t RIGHT_ENC_S1 = 7;   // Motor B S1 — LIVE channel, counted via PCINT2
 const uint8_t RIGHT_ENC_S2 = 3;   // Motor B S2 — DEAD channel, debug only
 
@@ -132,17 +130,17 @@ uint8_t input_len = 0;
 
 // ---------------- Encoder interrupts ----------------
 
-void leftEncoderIsr() {
-  // Single-channel tachometer: count every rising edge on S2.
-  // Direction is inferred from commanded motor direction in the control loop.
-  left_count++;
-}
-
-// Right encoder: the live signal is on D7 (PD7 / PCINT23), which is not an
-// external interrupt pin on the Nano. We use a pin-change interrupt (PCINT2
-// group). The ISR fires on both edges; we only count rising edges to match
-// the left encoder's RISING behaviour.
+// Both encoders: the live signal for each motor is on S1 (left = D4, right = D7).
+// Both D4 and D7 are on port D, so they share the PCINT2 pin-change interrupt
+// group. The ISR fires on both edges; we only count rising edges to match the
+// original RISING-edge behaviour. D0/D1 (also in PCINT2) carry serial traffic,
+// so the ISR also fires during UART RX, but it only checks PD4 and PD7, so it
+// is harmless — minor ISR overhead during serial bursts, negligible for a slow
+// tracked robot.
 ISR(PCINT2_vect) {
+  if (PIND & _BV(PD4)) {
+    left_count++;
+  }
   if (PIND & _BV(PD7)) {
     right_count++;
   }
@@ -450,15 +448,17 @@ void setup() {
   last_right_s1_level = digitalRead(RIGHT_ENC_S1);
   last_right_s2_level = digitalRead(RIGHT_ENC_S2);
 
-  attachInterrupt(digitalPinToInterrupt(LEFT_ENC_S2), leftEncoderIsr, RISING);
-  // Right encoder: D7 is not an external interrupt pin, so use a pin-change
-  // interrupt on PCINT2 (PD0-PD7 group). Enable only PCINT23 (PD7 = D7).
-  // NOTE: D0/D1 carry serial traffic, so PCINT2_vect also fires during UART
-  // RX, but the ISR only checks PD7, so it is harmless — just minor ISR overhead
+  // Both encoders use pin-change interrupts on PCINT2 (PD0-PD7 group):
+  //   Left encoder: D4 (PD4 / PCINT20, S1 — the live channel)
+  //   Right encoder: D7 (PD7 / PCINT23, S1 — the live channel)
+  // S2 channels (D2/D3) are dead on both motors and are for debugging only.
+  // NOTE: D0/D1 carry serial traffic, so PCINT2_vect also fires during UART RX,
+  // but the ISR only checks PD4 and PD7, so it is harmless — minor ISR overhead
   // during serial bursts, negligible for a slow tracked robot.
   PCICR |= _BV(PCIE2);
-  PCMSK2 |= _BV(PCINT23);
-  PCIFR |= _BV(PCIF2); // clear any pending flag
+  PCMSK2 |= _BV(PCINT20); // D4 = PD4 = PCINT20 (left encoder S1)
+  PCMSK2 |= _BV(PCINT23); // D7 = PD7 = PCINT23 (right encoder S1)
+  PCIFR |= _BV(PCIF2);    // clear any pending flag
 
   Serial.begin(SERIAL_BAUD);
   last_control_ms = millis();

@@ -173,9 +173,9 @@ from the motor's commanded direction in the firmware.
 
 | Function | Arduino Nano pin | Notes |
 |---|---:|---|
-| Left/Motor A encoder `S1` | D4 | retained for debugging only |
-| Left/Motor A encoder `S2` | D2 | external interrupt INT0, counted channel |
-| Right/Motor B encoder `S1` | D7 | live right encoder signal, counted via PCINT2 pin-change interrupt |
+| Left/Motor A encoder `S1` | D4 | live left encoder signal, counted via PCINT2 |
+| Left/Motor A encoder `S2` | D2 | dead channel, debug only |
+| Right/Motor B encoder `S1` | D7 | live right encoder signal, counted via PCINT2 |
 | Right/Motor B encoder `S2` | D3 | dead channel, debug only |
 
 The ISR counts every rising edge as +1 (magnitude only). The firmware negates
@@ -183,9 +183,10 @@ the tick delta when the commanded target velocity is negative, so the PID and
 reported tps have the correct sign. Direction-corrected deltas are accumulated
 into signed `left_position`/`right_position` values, reported in the E line.
 
-The left encoder `S2` (D2/INT0) is the live left channel and uses the external
-interrupt. The right encoder `S2` (D3/INT1) is dead; the live right signal is
-on `S1` (D7), which is counted via a pin-change interrupt (PCINT2/PCINT23).
+Both encoders have a hardware fault: only `S1` produces pulses on each motor.
+The left encoder `S1` (D4) is counted via a pin-change interrupt (PCINT2),
+and the right encoder `S1` (D7) is also counted via PCINT2. The `S2` channels
+(D2/D3) are dead and used for debugging only.
 
 ### Serial
 

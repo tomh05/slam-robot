@@ -109,21 +109,21 @@ Right motor:
 
 Left encoder:
 
-- Type: hall-effect, single-channel tachometer (only S2 used for counting after 2026-07-30 decision)
+- Type: hall-effect, single-channel tachometer (only S1 used for counting after 2026-07-30 decision)
 - Voltage level: 5 V from Arduino Nano
 - Pullups: Arduino internal `INPUT_PULLUP` enabled in firmware
 - Counts per output shaft revolution after gearbox: ~224 counts/rev (both directions)
 - Connected pins, matching discovered existing-board pinout:
-  - S1: Arduino D4, retained for raw pin debugging only (not used for direction)
-  - S2: Arduino D2 / INT0, counted channel
+  - S1: Arduino D4, **live counting channel** (counted via PCINT2 pin-change interrupt)
+  - S2: Arduino D2 / INT0, **dead** (no pulses from left encoder)
   - Vcc: Arduino 5 V
   - GND: Arduino GND
-- Direction sign when track moves forward: provisional `-1` (encoder reports negative for forward motion)
-- Notes: both S1 and S2 toggle when the motor is turned; direction is inferred from the commanded motor direction in the firmware, not from hardware.
+- Direction sign when track moves forward: +1 (encoder reports positive for forward motion, because firmware applies sign from commanded direction)
+- Notes: the left encoder's S2/D2 channel is dead; only S1/D4 produces pulses. The firmware counts on D4/S1 via PCINT2. Direction is inferred from the motor's commanded direction; true bidirectional hardware direction sensing is unavailable until the dead channel is repaired.
 
 Right encoder:
 
-- Type: hall-effect, single-channel tachometer (hardware fault: only one signal wire produces pulses)
+- Type: hall-effect, single-channel tachometer (only S1 used for counting after 2026-07-30 decision)
 - Voltage level: 5 V from Arduino Nano
 - Pullups: Arduino internal `INPUT_PULLUP` enabled in firmware
 - Counts per output shaft revolution after gearbox: ~150 counts/rev (both directions)
@@ -132,8 +132,8 @@ Right encoder:
   - S2: Arduino D3 / INT1, **dead** (no pulses from right encoder)
   - Vcc: Arduino 5 V
   - GND: Arduino GND
-- Direction sign when track moves forward: provisional `+1` (encoder reports positive for forward motion, because firmware applies sign from commanded direction)
-- Notes: the right encoder's S2/D3 channel is dead; only S1/D7 produces pulses. The firmware counts on D3/S2, so either (a) swap the right encoder wires at the Arduino so the live signal goes to D3, or (b) change the firmware to count on D7. Direction is inferred from the motor's commanded direction; true bidirectional hardware direction sensing is unavailable until the dead channel is repaired.
+- Direction sign when track moves forward: +1 (encoder reports positive for forward motion, because firmware applies sign from commanded direction)
+- Notes: the right encoder's S2/D3 channel is dead; only S1/D7 produces pulses. The firmware counts on D7/S1 via PCINT2. Direction is inferred from the motor's commanded direction; true bidirectional hardware direction sensing is unavailable until the dead channel is repaired.
 - Notes: user has access to a multimeter and logic analyser; measure S1/S2 voltage and pulse behaviour before finalising wiring/software
 
 Safety warning:
