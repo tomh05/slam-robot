@@ -42,11 +42,12 @@
 
 // ---------------- Pin mapping ----------------
 
-// MX1508 motor inputs. All selected pins support PWM on classic Nano.
-const uint8_t LEFT_IN_A = 5;   // HW-354 INA
-const uint8_t LEFT_IN_B = 6;   // HW-354 INB
-const uint8_t RIGHT_IN_A = 9;  // HW-354 INC
-const uint8_t RIGHT_IN_B = 10; // HW-354 IND
+// MX1508 motor driver PWM outputs (from the Nano's perspective).
+// All selected pins support PWM on classic Nano.
+const uint8_t LEFT_PWM_A = 9;   // HW-354 INA
+const uint8_t LEFT_PWM_B = 10;   // HW-354 INB
+const uint8_t RIGHT_PWM_A = 5;  // HW-354 INC
+const uint8_t RIGHT_PWM_B = 6; // HW-354 IND
 
 // Encoder/hall inputs, matching the existing board pinout.
 // Both encoders have a hardware fault: only S1 produces pulses, S2 is dead.
@@ -165,8 +166,8 @@ void setMx1508Motor(uint8_t in_a, uint8_t in_b, int pwm_command) {
 }
 
 void applyMotorOutputs() {
-  setMx1508Motor(LEFT_IN_A, LEFT_IN_B, LEFT_MOTOR_SIGN * left_pwm);
-  setMx1508Motor(RIGHT_IN_A, RIGHT_IN_B, RIGHT_MOTOR_SIGN * right_pwm);
+  setMx1508Motor(LEFT_PWM_A, LEFT_PWM_B, LEFT_MOTOR_SIGN * left_pwm);
+  setMx1508Motor(RIGHT_PWM_A, RIGHT_PWM_B, RIGHT_MOTOR_SIGN * right_pwm);
 }
 
 void stopMotors() {
@@ -431,10 +432,10 @@ void maybeReport() {
 // ---------------- Arduino entry points ----------------
 
 void setup() {
-  pinMode(LEFT_IN_A, OUTPUT);
-  pinMode(LEFT_IN_B, OUTPUT);
-  pinMode(RIGHT_IN_A, OUTPUT);
-  pinMode(RIGHT_IN_B, OUTPUT);
+  pinMode(LEFT_PWM_A, OUTPUT);
+  pinMode(LEFT_PWM_B, OUTPUT);
+  pinMode(RIGHT_PWM_A, OUTPUT);
+  pinMode(RIGHT_PWM_B, OUTPUT);
 
   stopMotors();
 
