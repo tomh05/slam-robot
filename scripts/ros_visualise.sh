@@ -11,6 +11,9 @@ RVIZ_CONFIG="${SCRIPT_DIR}/../ros2_ws/src/slam_robot_bringup/rviz/slam_robot.rvi
 
 # Source the local ROS 2 installation so rviz2 and its DDS middleware are
 # fully initialised with the right environment.
+# ROS 2 setup scripts reference variables (e.g. AMENT_TRACE_SETUP_FILES) that
+# may be unset, so temporarily disable `set -u` around the source calls.
+set +u
 if [ -f /opt/ros/jazzy/setup.bash ]; then
     # shellcheck source=/opt/ros/jazzy/setup.bash
     source /opt/ros/jazzy/setup.bash
@@ -21,6 +24,7 @@ fi
 if [ -f "${SCRIPT_DIR}/../ros2_ws/install/setup.bash" ]; then
     source "${SCRIPT_DIR}/../ros2_ws/install/setup.bash"
 fi
+set -u
 
 # Allow DDS to discover remote machines (not just localhost).
 unset ROS_LOCALHOST_ONLY
