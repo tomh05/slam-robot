@@ -56,25 +56,56 @@ fi
 echo "ROS_DOMAIN_ID=${ROS_DOMAIN_ID}"
 
 # --------------------------------------------------------------------------
-# Pre-flight: check that the robot's topics are visible over DDS.
+# Pre-flight: verify that the robot's topics and TF data are actually
+# flowing over DDS, not just advertised.
 # --------------------------------------------------------------------------
-echo "Checking DDS discovery..."
+echo ""
+echo "Checking DDS discovery and data flow..."
 
-if timeout 5 ros2 topic list --no-daemon 2>/dev/null | grep -qE "^/odom$|^/tf$"; then
-    echo "  ✓ Robot topics visible over DDS — discovery OK"
+# 1. List visible topics
+echo "  --- Visible topics ---"
+timeout 5 ros2 topic list --no-daemon 2>/dev/null || true | sort | sed 's/^/  /'
+
+# 2. Check for /tf and /odom specifically
+echo ""
+echo "  --- Key topic check ---"
+TOPICS=$(timeout 5 ros2 topic list --no-daemon 2>/dev/null || true)
+
+if echo "${TOPICS}" | grep -qx "/tf"; then
+    echo "  ✓ /tf topic visible"
 else
-    echo "  ✗ Cannot see /odom or /tf from the robot."
-    echo ""
-    echo "  Possible causes:"
-    echo "  1. Robot core is not running. Start it with:"
-    echo "       ./scripts/ros_start_no_motors.sh"
-    echo "     (the old 'ros-start' script is gone — restart the robot.)"
-    echo "  2. ROS_DOMAIN_ID mismatch. Robot and laptop must both use ${ROS_DOMAIN_ID}."
-    echo "  3. Network multicast blocked or robot on a different subnet."
-    echo "     ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-unset} should help with this."
-    echo "  4. Firewall on the robot blocking UDP traffic."
-    echo ""
-    echo "  Starting rviz2 anyway — you can re-check with: ros2 topic list"
+    echo "  ✗ /tf topic NOT visible"
+    echo "     The robot's arduino_base_node may not be running."
+    echo "     Restart it with: ./scripts/ros_start_no_motors.sh"
+fi
+
+if echo "${TOPICS}" | grep -qx "/odom"; then
+    echo "  ✓ /odom topic visible"
+else
+    echo "  ✗ /odom topic NOT visible"
+fi
+
+# 3. Try to receive actual TF data
+echo ""
+echo "  --- Attempting to receive TF data (5s) ---"
+TF_LINE=""
+if command -v timeout &>/dev/null; then
+    TF_LINE=$(timeout 5 ros2 topic echo /tf --no-arr 2>/dev/null | head -1 || true)
+fi
+
+if [ -n "${TF_LINE}" ]; then
+    echo "  ✓ TF data received!"
+elif echo "${TOPICS}" | grep -q "/tf"; then
+    echo "  ~ /tf topic exists but no messages arrived in 5s."
+    echo "    The robot is discovered but may not be sending TF."
+    echo "    Check that the Arduino is connected and sending status lines."
+    echo "    (arduino_base_node only publishes TF when it receives 'E' lines)"
+else
+    echo "  ✗ No /tf data received."
+    echo "    Most likely: the robot is not running on ROS_DOMAIN_ID=${ROS_DOMAIN_ID}."
+    echo "    1. Kill any old robot session: pkill -f 'ros2 launch'"
+    echo "    2. Restart with: ./scripts/ros_start_no_motors.sh"
+    echo "    3. If multicast is blocked, ROS_STATIC_PEERS=${ROS_STATIC_PEERS:-unset} handles it."
 fi
 
 echo ""
