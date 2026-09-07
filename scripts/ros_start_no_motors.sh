@@ -5,14 +5,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=robot_env.sh
 source "${SCRIPT_DIR}/robot_env.sh"
 
-MOTORS="false"
-if [[ "${1:-}" == "--motors" || "${1:-}" == "-m" ]]; then
-    MOTORS="true"
-    shift
-fi
-
-echo "Starting robot core (motors_enabled=${MOTORS})..."
+echo "Starting robot core (motors disabled) on ${ROBOT_HOST}..."
 ssh -t "${ROBOT_SSH}" \
     "source /opt/ros/jazzy/setup.bash && \
      source ${ROBOT_PROJECT_DIR}/ros2_ws/install/setup.bash && \
-     ros2 launch slam_robot_bringup robot_core.launch.py motors_enabled:=${MOTORS} $*"
+     ros2 launch slam_robot_bringup robot_core.launch.py motors_enabled:=false $*"
