@@ -52,8 +52,6 @@ class LidarScanPublisher(Node):
         self._last_raw_angle = None  # last raw angle seen (degrees) for unwrapping
         self._angle_offset = 0.0     # cumulative offset to keep angle monotonic (degrees)
         self._last_packet_time = self.get_clock().now()
-        self._prev_raw_dist = 0          # previous raw 16‑bit distance
-        self._dist_wrap_count = 0        # wrap counter
 
         # Constants
         self._SAMPLE_RATE_HZ = 4000.0   # samples per second (4 kHz)
@@ -117,21 +115,6 @@ class LidarScanPublisher(Node):
                     # Apply mask (clear two LSBs) and convert to metres
                     distance_q2 = distance_raw & 0xfffc
                     range_m = distance_q2 / 4000.0
-                    # ← NEW: distance wrap‑correction (optional but helps if the sensor ever
-                    #        returns a value that has wrapped its 16‑bit counter)
-                    if hasattr(self, '_prev_raw_dist'):
-                        # Detect a large negative jump (raw decreased a lot) → wrap forward
-                        if distance_raw < self._prev_raw_dist - 32768:   # half the range
-                            self._dist_wrap_count += 1
-                        # Detect a large positive jump (raw increased a lot) → wrap backward
-                        elif distance_raw > self._prev_raw_dist + 32768:
-                            self._dist_wrap_count -= 1
-                    else:
-                        self._prev_raw_dist = distance_raw
-                        self._dist_wrap_count = 0
-                    # Add the wrap offset (each wrap adds/subtracts one full period)
-                    range_m += self._dist_wrap_count * (65536 >> 2) / 4000.0   # 16.383 m per wrap
-                    # ← END NEW
                     # Invalid range -> inf
                     if range_m <= 0.0 or math.isinf(range_m) or range_m < 0.12 or range_m > 16.0:
                         range_m = float('inf')
