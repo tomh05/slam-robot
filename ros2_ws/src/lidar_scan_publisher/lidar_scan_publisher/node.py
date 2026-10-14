@@ -102,33 +102,54 @@ class LidarScanPublisher(Node):
                     self._buffer = buf[i:]
                     break
 
-                # Parse samples
+                # Parse samples (intensity first, then distance low/high)
                 packet_ranges = []
                 packet_intensities = []
                 packet_angles_raw = []   # raw angle in degrees [0,360)
                 for n in range(LSN):
                     off = samp_start + n * 3
-                    dist_low = buf[off]
-                    dist_high = buf[off + 1]
-                    intensity = buf[off + 2]
-                    distance_raw = dist_low | (dist_high << 8)   # little endian, raw units (mm)
-                    # Convert to metres; adjust DIST_SCALE if needed
-                    DIST_SCALE = 1000.0  # mm -> m
-                    range_m = distance_raw / DIST_SCALE
-                    if range_m <= 0.0 or math.isinf(range_m):
+                    intensity = buf[off]
+                    dist_low = buf[off + 1]
+                    dist_high = buf[off + 2]
+                    distance_raw = dist_low | (dist_high << 8)   # little endian, raw units
+                    # Apply mask and convert to metres: (raw & 0xfffc) / 4000.0
+                    distance_q2 = distance_raw & 0xfffc
+                    range_m = distance_q2 / 4000.0
+                    # Invalid range -> inf
+                    if range_m <= 0.0 or math.isinf(range_m) or range_m < 0.12 or range_m > 16.0:
                         range_m = float('inf')
                     packet_ranges.append(range_m)
                     packet_intensities.append(float(intensity))
 
-                    # Compute raw angle for this sample using FSA and LSA of this packet
-                    # Angle encoding: (value >> 1) / 64.0 degrees
+                    # ---- Angle calculation (first‑order + second‑order correction) ----
                     fsa_angle = (FSA >> 1) / 64.0
                     lsa_angle = (LSA >> 1) / 64.0
-                    # Handle wrap‑around within packet
                     if lsa_angle < fsa_angle:
                         lsa_angle += 360.0
-                    step = (lsa_angle - fsa_angle) / (LSN - 1) if LSN > 1 else 0.0
+                    raw_step = (lsa_angle - fsa_angle) / (LSN - 1) if LSN > 1 else 0.0
+                    # Motor spins clockwise, lidar reports CCW -> invert step
+                    step = -raw_step
+
+                    # Base angle for this sample
                     angle_deg = fsa_angle + n * step
+
+                    # Second‑order angle correction (YDLIDAR protocol)
+                    if distance_q2 > 0:   # avoid division by zero
+                        # AngCorrect = atan(21.8 * (155.3 - d) / (155.3 * d)) * (180/π)
+                        ang_corr = math.atan2(
+                            21.8 * (155.3 - distance_q2),
+                            155.3 * distance_q2
+                        ) * 180.0 / math.pi
+                    else:
+                        ang_corr = 0.0
+                    angle_deg += ang_corr
+                    # Keep angle in [0,360) for unwrapping later
+                    if angle_deg < 0.0:
+                        angle_deg += 360.0
+                    elif angle_deg >= 360.0:
+                        angle_deg -= 360.0
+                    # --------------------------------------------------------------
+
                     packet_angles_raw.append(angle_deg)
 
                 # Determine if this packet marks the start of a new ring
