@@ -155,13 +155,26 @@ class LidarScanPublisher(Node):
                 # Determine if this packet marks the start of a new ring
                 ring_start = (CT & 0x01) == 1
 
-                # Unwrap angles and accumulate
+                                # Unwrap angles and accumulate
                 for angle_deg, range_m, intensity in zip(packet_angles_raw, packet_ranges, packet_intensities):
                     if self._last_raw_angle is not None:
-                        # Detect big jump indicating wrap
+                        # Detect big jump indicating wrap (new scan)
                         if angle_deg < self._last_raw_angle - 180.0:
-                            self._angle_offset += 360.0
+                            # Publish accumulated scan if we have data
+                            if self._acc_ranges:
+                                self._publish_accumulated_scan()
+                                # Reset accumulators for new scan
+                                self._acc_ranges = []
+                                self._acc_intensities = []
+                                self._acc_angles_raw = []
+                                self._last_raw_angle = None
+                                # Keep angle_offset as is? Actually we need to adjust offset to maintain continuity.
+                                # We'll add 360 to offset to keep angles increasing.
+                                self._angle_offset += 360.0
+                            # After reset, set last_raw_angle to None so next sample starts fresh
+                            self._last_raw_angle = None
                         elif angle_deg > self._last_raw_angle + 180.0:
+                            # Wrap the other way (unlikely but handle)
                             self._angle_offset -= 360.0
                     adjusted_angle = angle_deg + self._angle_offset
                     self._acc_ranges.append(range_m)
@@ -171,27 +184,6 @@ class LidarScanPublisher(Node):
 
                 # Update last packet time
                 self._last_packet_time = self.get_clock().now()
-
-                if ring_start:
-                    # Start of a new scan: publish accumulated data (if any) then reset
-                    if self._acc_ranges:
-                        self._publish_accumulated_scan()
-                        # Reset accumulators for the new scan, but include current packet's samples
-                        self._acc_ranges = packet_ranges.copy()
-                        self._acc_intensities = packet_intensities.copy()
-                        self._acc_angles_raw = packet_angles_raw.copy()
-                        self._last_raw_angle = packet_angles_raw[-1] if packet_angles_raw else None
-                        self._angle_offset = 0.0
-                    else:
-                        # First packet is a ring start; just keep its samples
-                        self._acc_ranges = packet_ranges.copy()
-                        self._acc_intensities = packet_intensities.copy()
-                        self._acc_angles_raw = packet_angles_raw.copy()
-                        self._last_raw_angle = packet_angles_raw[-1] if packet_angles_raw else None
-                        self._angle_offset = 0.0
-                else:
-                    # Normal packet: just append
-                    pass
 
                 # Move index past this packet and continue looking for another header
                 i = needed
