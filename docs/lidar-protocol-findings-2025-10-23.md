@@ -183,8 +183,15 @@ firmware constants and are simply filtered out by `range_max`.
 | `scripts/lidar_profile.py` | **new** — revolution assembly, raw-value statistics, ASCII polar plot |
 | `scripts/lidar_replay.py` | **new** — replays a capture through the *real* parser (offline regression test) |
 | `scripts/lidar_capture_serial.py` | existing capture helper |
+| `decode_packet.py` (repo root) | quick 5-packet dump — **fixed** (it had the same off-by-one and the wrong sample order) |
+| `ros2_ws/src/lidar_scan_publisher/test/test_ydlidar_protocol.py` | **new** — 7 pytest cases, including a regression test on the real capture (`python3 -m pytest ros2_ws/src/lidar_scan_publisher/test -q` → 7 passed) |
 
 ### Tools and what they show
+
+All analysis in this session was done **offline** on the saved capture
+`lidar_153600.bin` (131 507 bytes, 1111 packets, captured 2025-10-02 on the
+robot).  The robot was offline at the end of this session, so a fresh live
+capture is still missing.
 
 ```bash
 # 1. capture (on the robot)
