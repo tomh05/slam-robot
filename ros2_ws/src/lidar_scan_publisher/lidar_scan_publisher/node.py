@@ -1,257 +1,218 @@
 #!/usr/bin/env python3
+# Copyright 2025 The slam-robot contributors
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """
 lidar_scan_publisher
 ~~~~~~~~~~~~~~~~~~~~
-ROS 2 node that reads a YDLIDAR S4B‑compatible lidar on /dev/ttyUSB0
-(RX‑only, no TX needed) and publishes sensor_msgs/LaserScan on /scan.
+ROS 2 node that reads a YDLIDAR S4B-class lidar on a serial port (RX only,
+no TX handshake needed) and publishes sensor_msgs/LaserScan on /scan.
 
-Assumptions (matching your test‑session log):
-  * Baud rate: 153600
-  * Packet header: 0xAA 0x55
-  * Angle encoding: (value >> 1) / 64.0  degrees
-  * Distance: raw units = millimetres (if scaling differs, adjust DIST_SCALE)
-  * Intensity: 8‑bit
-  * Sample rate: 4 kHz (samples per second) – used to compute scan time.
+All protocol handling lives in `ydlidar_protocol.py` (ROS free, unit
+testable / replayable offline with scripts/lidar_replay.py).  The framing used
+there was verified against a real capture with the vendor checksum:
+
+  * 10 byte header, samples start at header + 10 (NOT + 9),
+  * 3 bytes per sample: [quality][dist_lo][dist_hi] (intensity first),
+  * range_m = distance_q2 / 4000.0   (TYPE_TRIANGLE scale),
+  * angle  = (FSA >> 1)/64 + i*interval + second order distance correction.
+
+Getting the sample offset wrong (header + 9) shifts every sample by one byte
+and completely scrambles the ranges (they become ~256x too large and wrap
+around), which is what produced the "V shaped" walls and the multiple
+echoes seen in RViz.
+
+Examples
+--------
+    ros2 run lidar_scan_publisher lidar_scan_publisher --ros-args \
+        -p port:=/dev/ttyUSB0 -p baud:=153600 -p frame_id:=laser
+
+    ros2 run lidar_scan_publisher lidar_scan_publisher --port /dev/ttyUSB0 \
+        --angle-increment 1.0 --range-max 8.0
 """
 
+import argparse
 import math
-import struct
+import sys
+import time
+
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import LaserScan
-import serial
+
+try:
+    import serial
+except ImportError:  # pragma: no cover
+    print('pyserial is required: pip install pyserial', file=sys.stderr)
+    raise
+
+try:
+    from .ydlidar_protocol import DISTANCE_SCALE_TRIANGLE, YdLidarParser
+except ImportError:  # running as a plain script
+    from ydlidar_protocol import DISTANCE_SCALE_TRIANGLE, YdLidarParser
 
 
 class LidarScanPublisher(Node):
-    def __init__(self):
+
+    def __init__(self, args):
         super().__init__('lidar_scan_publisher')
-        # Publisher
+
+        self.declare_parameter('port', args.port)
+        self.declare_parameter('baud', args.baud)
+        self.declare_parameter('frame_id', args.frame_id)
+        self.declare_parameter('angle_min_deg', args.angle_min)
+        self.declare_parameter('angle_max_deg', args.angle_max)
+        self.declare_parameter('angle_increment_deg', args.angle_increment)
+        self.declare_parameter('range_min', args.range_min)
+        self.declare_parameter('range_max', args.range_max)
+        self.declare_parameter('distance_scale', args.scale)
+        self.declare_parameter('invert', args.invert)
+        self.declare_parameter('correct_angles', not args.no_correct)
+
+        self.port = self.get_parameter('port').value
+        self.baud = int(self.get_parameter('baud').value)
+        self.frame_id = self.get_parameter('frame_id').value
+        self.angle_min_deg = float(self.get_parameter('angle_min_deg').value)
+        self.angle_max_deg = float(self.get_parameter('angle_max_deg').value)
+        self.angle_increment_deg = float(
+            self.get_parameter('angle_increment_deg').value)
+        self.range_min = float(self.get_parameter('range_min').value)
+        self.range_max = float(self.get_parameter('range_max').value)
+        self.scale = float(self.get_parameter('distance_scale').value)
+        self.invert = bool(self.get_parameter('invert').value)
+        self.correct_angles = bool(self.get_parameter('correct_angles').value)
+
         self.pub = self.create_publisher(LaserScan, 'scan', 10)
 
-        # Serial configuration – adjust if your port differs
-        self.ser = serial.Serial(
-            port='/dev/ttyUSB0',
-            baudrate=153600,
-            bytesize=serial.EIGHTBITS,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            timeout=0.1
-        )
-        self.get_logger().info('Lidar scan publisher started on /dev/ttyUSB0 @ 153600 baud')
+        try:
+            self.ser = serial.Serial(
+                port=self.port,
+                baudrate=self.baud,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=0.1)
+        except Exception as exc:                       # pragma: no cover
+            self.get_logger().fatal(f'cannot open {self.port}: {exc}')
+            raise
 
-        # Timer to periodically process incoming bytes (≈50 Hz)
-        self.timer = self.create_timer(0.02, self.timer_callback)
+        self.get_logger().info(
+            f'YDLIDAR publisher: {self.port} @ {self.baud} baud, frame '
+            f'"{self.frame_id}", distance scale /{self.scale:.0f}, angles '
+            f'{self.angle_min_deg}..{self.angle_max_deg} deg step '
+            f'{self.angle_increment_deg} deg, range '
+            f'{self.range_min}..{self.range_max} m')
 
-        # Buffer for incomplete packets that span reads
-        self._buffer = b''
+        self.parser = YdLidarParser(scale=self.scale,
+                                    range_min=self.range_min,
+                                    range_max=self.range_max,
+                                    correct_angles=self.correct_angles,
+                                    invert=self.invert)
+        self._scan_period = 0.1365        # s, refined from the ring starts
+        self._last_rev_end = None
+        self._revolutions = 0
 
-        # Accumulators for building a full scan
-        self._acc_ranges = []        # distances in metres
-        self._acc_intensities = []   # intensity as float
-        self._acc_angles_raw = []    # raw angle in degrees [0,360) for unwrapping
-        self._last_raw_angle = None  # last raw angle seen (degrees) for unwrapping
-        self._angle_offset = 0.0     # cumulative offset to keep angle monotonic (degrees)
-        self._last_packet_time = self.get_clock().now()
+        self.timer = self.create_timer(0.02, self._timer_callback)
 
-        # Constants
-        self._SAMPLE_RATE_HZ = 4000.0   # samples per second (4 kHz)
-        self._SCAN_TIMEOUT_SEC = 0.5    # if no packet for this long, force publish
-
-    def timer_callback(self):
-        """Read whatever is available, try to extract complete packets, publish scans."""
-        data = self.ser.read(2048)
-        if not data:
+    # ------------------------------------------------------------------
+    def _timer_callback(self):
+        try:
+            data = self.ser.read(4096)
+        except Exception as exc:                       # pragma: no cover
+            self.get_logger().error(f'serial read failed: {exc}')
             return
-        self._process_buffer(data)
+        if data:
+            for rev in self.parser.feed(data):
+                self._publish(rev)
+        if (self._last_rev_end is not None and
+                time.monotonic() - self._last_rev_end > 2.0):
+            # no complete revolution for 2 s -> publish what we have
+            self._publish(self.parser.flush())
+            self._last_rev_end = None
 
-        # Timeout check: if we have accumulated data but no new packet for a while, publish
-        now = self.get_clock().now()
-        if (now - self._last_packet_time).nanoseconds / 1e9 > self._SCAN_TIMEOUT_SEC:
-            if self._acc_ranges:
-                self._publish_accumulated_scan()
-                self._acc_ranges.clear()
-                self._acc_intensities.clear()
-                self._acc_angles_raw = []
-                self._last_raw_angle = None
-                self._angle_offset = 0.0
-
-    def _process_buffer(self, raw: bytes):
-        """Append new data to internal buffer and extract as many full packets as possible."""
-        buf = self._buffer + raw
-        self._buffer = b''
-        i = 0
-        while i < len(buf) - 1:
-            # Look for the packet header AA 55
-            if buf[i] == 0xAA and i + 1 < len(buf) and buf[i + 1] == 0x55:
-                # Minimum packet size: header + 9 bytes (CT LSN FSA LSA CS) + at least 1 sample (3 bytes)
-                if i + 9 > len(buf):
-                    # Not enough data yet – keep what we have and wait for more
-                    self._buffer = buf[i:]
-                    break
-
-                CT = buf[i + 2]
-                LSN = buf[i + 3]                     # number of samples in this packet
-                FSA = struct.unpack('<H', buf[i + 4:i + 6])[0]   # First Sample Angle (raw)
-                LSA = struct.unpack('<H', buf[i + 6:i + 8])[0]   # Last Sample Angle (raw)
-                CS = buf[i + 8]                      # Checksum (we ignore it for simplicity)
-
-                # Verify we have enough bytes for the samples
-                samp_start = i + 9
-                needed = samp_start + LSN * 3       # each sample = 3 bytes (distLo, distHi, intensity)
-                if needed > len(buf):
-                    self._buffer = buf[i:]
-                    break
-
-                # Parse samples (intensity first, then distance low/high)
-                packet_ranges = []
-                packet_intensities = []
-                packet_angles_raw = []   # raw angle in degrees [0,360)
-                for n in range(LSN):
-                    off = samp_start + n * 3
-                    intensity = buf[off]
-                    dist_low = buf[off + 1]
-                    dist_high = buf[off + 2]
-                    distance_raw = dist_low | (dist_high << 8)   # little endian, raw units
-                    # Apply mask (clear two LSBs) and convert to metres
-                    distance_q2 = distance_raw & 0xfffc
-                    range_m = distance_q2 / 4000.0
-                    # Invalid range -> inf
-                    if range_m <= 0.0 or math.isinf(range_m) or range_m < 0.12 or range_m > 16.0:
-                        range_m = float('inf')
-                    packet_ranges.append(range_m)
-                    packet_intensities.append(float(intensity))
-
-                    # ---- Angle calculation (first‑order + second‑order correction) ----
-                    fsa_angle = (FSA >> 1) / 64.0
-                    lsa_angle = (LSA >> 1) / 64.0
-                    if lsa_angle < fsa_angle:
-                        lsa_angle += 360.0
-                    raw_step = (lsa_angle - fsa_angle) / (LSN - 1) if LSN > 1 else 0.0
-                    # Motor spins clockwise, lidar reports CCW -> invert step
-                    step = -raw_step
-
-                    # Base angle for this sample
-                    angle_deg = fsa_angle + n * step
-
-                    # Second‑order angle correction (YDLIDAR protocol)
-                    if distance_q2 > 0:   # avoid division by zero
-                        # AngCorrect = atan(21.8 * (155.3 - d) / (155.3 * d)) * (180/π)
-                        ang_corr = math.atan2(
-                            21.8 * (155.3 - distance_q2),
-                            155.3 * distance_q2
-                        ) * 180.0 / math.pi
-                    else:
-                        ang_corr = 0.0
-                    angle_deg += ang_corr
-                    # Keep angle in [0,360) for unwrapping later
-                    if angle_deg < 0.0:
-                        angle_deg += 360.0
-                    elif angle_deg >= 360.0:
-                        angle_deg -= 360.0
-                    # --------------------------------------------------------------
-
-                    packet_angles_raw.append(angle_deg)
-
-                # Determine if this packet marks the start of a new ring
-                ring_start = (CT & 0x01) == 1
-
-                                # Unwrap angles and accumulate
-                for angle_deg, range_m, intensity in zip(packet_angles_raw, packet_ranges, packet_intensities):
-                    if self._last_raw_angle is not None:
-                        # Detect big jump indicating wrap (new scan)
-                        if angle_deg < self._last_raw_angle - 180.0:
-                            # Publish accumulated scan if we have data
-                            if self._acc_ranges:
-                                self._publish_accumulated_scan()
-                                # Reset accumulators for new scan
-                                self._acc_ranges = []
-                                self._acc_intensities = []
-                                self._acc_angles_raw = []
-                                self._last_raw_angle = None
-                                # Keep angle_offset as is? Actually we need to adjust offset to maintain continuity.
-                                # We'll add 360 to offset to keep angles increasing.
-                                self._angle_offset += 360.0
-                            # After reset, set last_raw_angle to None so next sample starts fresh
-                            self._last_raw_angle = None
-                        elif angle_deg > self._last_raw_angle + 180.0:
-                            # Wrap the other way (unlikely but handle)
-                            self._angle_offset -= 360.0
-                    adjusted_angle = angle_deg + self._angle_offset
-                    self._acc_ranges.append(range_m)
-                    self._acc_intensities.append(intensity)
-                    self._acc_angles_raw.append(adjusted_angle)
-                    self._last_raw_angle = angle_deg
-
-                # Update last packet time
-                self._last_packet_time = self.get_clock().now()
-
-                # Move index past this packet and continue looking for another header
-                i = needed
-            else:
-                i += 1
-
-        # Any trailing bytes that could be a split header are kept for next iteration
-        if i > 0 and i < len(buf):
-            self._buffer = buf[i:]
-
-    def _publish_accumulated_scan(self):
-        """Build and publish a LaserScan message from the accumulated data."""
-        if not self._acc_ranges:
+    # ------------------------------------------------------------------
+    def _publish(self, revolution):
+        if not revolution:
             return
-        N = len(self._acc_ranges)
-        if N < 2:
-            # Not enough points to form a scan
-            return
+        now = time.monotonic()
+        if self._last_rev_end is not None:
+            period = now - self._last_rev_end
+            if 0.02 < period < 2.0:
+                self._scan_period = period
+        self._last_rev_end = now
+        self._revolutions += 1
 
-        # Angles are already unwrapped and monotonic increasing (in degrees)
-        angle_min_deg = self._acc_angles_raw[0]
-        angle_max_deg = self._acc_angles_raw[-1]
-        # Ensure we have less than one full rotation (should be true)
-        span_deg = angle_max_deg - angle_min_deg
-        if span_deg >= 360.0:
-            # More than one rotation; truncate to first 360 degrees
-            # Find where angle exceeds angle_min_deg + 360
-            limit = angle_min_deg + 360.0
-            idx = 0
-            while idx < N and self._acc_angles_raw[idx] < limit:
-                idx += 1
-            N = idx
-            if N < 2:
-                return
-            angle_max_deg = self._acc_angles_raw[N-1]
-            # Trim arrays
-            self._acc_ranges = self._acc_ranges[:N]
-            self._acc_intensities = self._acc_intensities[:N]
-            self._acc_angles_raw = self._acc_angles_raw[:N]
-
-        angle_min_rad = math.radians(angle_min_deg)
-        angle_max_rad = math.radians(angle_max_deg)
-        angle_increment_rad = (angle_max_rad - angle_min_rad) / (N - 1) if N > 1 else 0.0
-
-        # Compute scan time based on sample rate and number of samples
-        time_per_sample = 1.0 / self._SAMPLE_RATE_HZ
-        scan_time = (N - 1) * time_per_sample
-        time_increment = time_per_sample
+        n_cells = int(round((self.angle_max_deg - self.angle_min_deg) /
+                            self.angle_increment_deg)) + 1
+        ranges = [float('inf')] * n_cells
+        intensities = [0.0] * n_cells
+        for p in revolution:
+            a = p.angle
+            while a < self.angle_min_deg:
+                a += 360.0
+            while a >= self.angle_max_deg:
+                a -= 360.0
+            idx = int(math.ceil((a - self.angle_min_deg) /
+                                self.angle_increment_deg))
+            if 0 <= idx < n_cells and not math.isinf(p.rng):
+                ranges[idx] = p.rng
+                intensities[idx] = p.quality
 
         scan = LaserScan()
         scan.header.stamp = self.get_clock().now().to_msg()
-        scan.header.frame_id = 'laser'
-        scan.angle_min = angle_min_rad
-        scan.angle_max = angle_max_rad
-        scan.angle_increment = angle_increment_rad
-        scan.time_increment = time_increment
-        scan.scan_time = scan_time
-        scan.range_min = 0.12   # from S4B spec (metres)
-        scan.range_max = 16.0   # from S4B spec (metres)
-        scan.ranges = self._acc_ranges
-        scan.intensities = self._acc_intensities
+        scan.header.frame_id = self.frame_id
+        scan.angle_min = math.radians(self.angle_min_deg)
+        scan.angle_max = math.radians(self.angle_min_deg +
+                                      (n_cells - 1) * self.angle_increment_deg)
+        scan.angle_increment = math.radians(self.angle_increment_deg)
+        scan.time_increment = self._scan_period / max(1, n_cells - 1)
+        scan.scan_time = self._scan_period
+        scan.range_min = self.range_min
+        scan.range_max = self.range_max
+        scan.ranges = ranges
+        scan.intensities = intensities
         self.pub.publish(scan)
-        self.get_logger().debug(f'Published scan with {N} points')
+
+        valid = sum(1 for r in ranges if not math.isinf(r))
+        self.get_logger().debug(
+            f'scan {self._revolutions}: {n_cells} cells, {valid} valid, '
+            f'period {self._scan_period * 1000:.1f} ms, packets '
+            f'{self.parser.stats["packets"]}, bad '
+            f'{self.parser.stats["bad_checksum"]}')
 
 
 def main(args=None):
+    parser = argparse.ArgumentParser(description='YDLIDAR -> LaserScan')
+    parser.add_argument('--port', default='/dev/ttyUSB0')
+    parser.add_argument('--baud', type=int, default=153600)
+    parser.add_argument('--frame-id', default='laser')
+    parser.add_argument('--angle-min', type=float, default=-180.0)
+    parser.add_argument('--angle-max', type=float, default=180.0)
+    parser.add_argument('--angle-increment', type=float, default=1.0)
+    parser.add_argument('--range-min', type=float, default=0.12)
+    parser.add_argument('--range-max', type=float, default=8.0)
+    parser.add_argument('--scale', type=float, default=DISTANCE_SCALE_TRIANGLE,
+                        help='range_m = distance_q2 / scale (SDK: 4000)')
+    parser.add_argument('--invert', action='store_true',
+                        help='mirror the scan (if the cloud rotates the wrong '
+                             'way)')
+    parser.add_argument('--no-correct', action='store_true',
+                        help='disable the second order angle correction')
+    cli = parser.parse_args(args)
+
     rclpy.init(args=args)
-    node = LidarScanPublisher()
+    node = LidarScanPublisher(cli)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

@@ -1,5 +1,13 @@
 # LiDAR Test Session - 2025-10-02
 
+> **Superseded in part (2025-10-23).**  The packet framing used here was
+> wrong: the header is 10 bytes (not 9) and a sample is
+> `[quality][dist_lo][dist_hi]` (intensity first).  The distance scale is
+> `distance_q2 / 4000` (0.25 mm per count) and the sample block starts at
+> `header + 10`.  The off-by-one was the root cause of the bogus ranges.
+> See **docs/lidar-protocol-findings-2025-10-23.md** and the tools in
+> `scripts/lidar_debug.py`, `scripts/lidar_profile.py`, `scripts/lidar_replay.py`.
+
 ## Summary
 Successfully identified and captured data from the factory test LiDAR module. It speaks standard **YDLIDAR protocol** at **153600 baud** (S4B model parameters).
 

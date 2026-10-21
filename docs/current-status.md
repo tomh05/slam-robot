@@ -271,6 +271,13 @@ Do not rediscover these; details are in the linked docs.
 - Motor output/control pins are decided: Arduino D5/D6/D9/D10 for HW-354 `INA`/`INB`/`INC`/`IND` respectively.
 - Motor connector order: `M+`, `M-`, `GND`, `VCC`, `S1`, `S2`.
 - Lidar: likely MB_1R2T or compatible 5 V serial lidar. Preferred path is to port community MB_1R2T parser to ROS 2. Official YDLIDAR ROS 2 driver exists but is secondary for this module.
+  - **Update 2025-10-23:** the module speaks the **YDLIDAR protocol** (verified
+    with the vendor checksum, 1111/1111 packets valid).  Framing, distance
+    scale and angle maths are now proven and documented in
+    `docs/lidar-protocol-findings-2025-10-23.md`; the custom ROS 2 node has
+    been rewritten on top of a unit tested decoder
+    (`ros2_ws/src/lidar_scan_publisher/lidar_scan_publisher/ydlidar_protocol.py`).
+    The last on-robot check of the rewritten node is still outstanding.
 - Spare adapter: MAX3232 RS232-TTL level converter. It is not a USB-to-TTL adapter by itself; do not connect RS232 side to lidar TTL or Pi GPIO.
 
 ## Most important docs
@@ -289,6 +296,7 @@ Start by reading:
 - `docs/mains-bench-power-notes.md`
 - `docs/motor-control-arduino-nano-plan.md`
 - `docs/lidar-mb-1r2t-ros2-port.md`
+- `docs/lidar-protocol-findings-2025-10-23.md` — **read this before touching the lidar**: proven packet framing, checksum, distance scale, and the root cause of the bogus ranges.
 - `docs/old-sd-card-inspection.md`
 
 ## Important scripts/firmware
@@ -298,6 +306,9 @@ Start by reading:
 - `scripts/bootstrap_robot_ubuntu24_ros2_jazzy.sh` — fuller bootstrap for larger card/later use.
 - `scripts/sync_to_robot.sh` and `scripts/robot_env.sh` — deployment helpers.
 - `scripts/lidar_capture_serial.py` — serial baud/protocol capture helper for lidar.
+- `scripts/lidar_debug.py` — packet inspector: brute-forces the framing and validates it with the vendor checksum (works on a saved `.bin` capture).
+- `scripts/lidar_profile.py` — revolution assembly, raw value statistics and an ASCII polar plot of a capture.
+- `scripts/lidar_replay.py` — replays a capture through the real decoder (offline regression test).
 - `firmware/arduino_nano_base_controller/arduino_nano_base_controller.ino` — initial Arduino Nano base-controller firmware skeleton.
 
 ## Suggested next development order
