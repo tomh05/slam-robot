@@ -21,6 +21,21 @@
   <xacro:arg name="lidar_z" default="0.0555" />
   <xacro:arg name="lidar_yaw" default="0.0" />
 
+  <xacro:property name="track_separation" value="$(arg track_separation)" />
+  <xacro:property name="track_contact_length" value="$(arg track_contact_length)" />
+  <xacro:property name="track_overall_length" value="$(arg track_overall_length)" />
+  <xacro:property name="track_width" value="$(arg track_width)" />
+  <xacro:property name="track_height" value="$(arg track_height)" />
+  <xacro:property name="chassis_length" value="$(arg chassis_length)" />
+  <xacro:property name="chassis_width" value="$(arg chassis_width)" />
+  <xacro:property name="chassis_height" value="$(arg chassis_height)" />
+  <xacro:property name="base_link_z" value="$(arg base_link_z)" />
+  <xacro:property name="lidar_x" value="$(arg lidar_x)" />
+  <xacro:property name="lidar_y" value="$(arg lidar_y)" />
+  <xacro:property name="lidar_z" value="$(arg lidar_z)" />
+  <xacro:property name="lidar_yaw" value="$(arg lidar_yaw)" />
+
+  <xacro:property name="pi" value="3.1415926535897931" />
   <xacro:property name="wheel_radius" value="${track_height/2.0}" />
   <xacro:property name="wheel_length" value="${track_width}" />
   <xacro:property name="track_box_length" value="${track_contact_length}" />
@@ -45,7 +60,7 @@
   <joint name="base_footprint_to_base_link" type="fixed">
     <parent link="base_footprint" />
     <child link="base_link" />
-    <origin xyz="0 0 $(arg base_link_z)" rpy="0 0 0" />
+    <origin xyz="0 0 ${base_link_z}" rpy="0 0 0" />
   </joint>
 
   <!-- Robot body is a box -->
@@ -53,14 +68,14 @@
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <box size="$(arg chassis_length) $(arg chassis_width) $(arg chassis_height)" />
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}" />
       </geometry>
       <material name="chassis_dark" />
     </visual>
     <collision>
       <origin xyz="0 0 0" rpy="0 0 0" />
       <geometry>
-        <box size="$(arg chassis_length) $(arg chassis_width) $(arg chassis_height)" />
+        <box size="${chassis_length} ${chassis_width} ${chassis_height}" />
       </geometry>
     </collision>
     <inertial>
@@ -71,9 +86,7 @@
   </link>
 
   <xacro:macro name="track" params="name y">
-    <xacro:property name="track_center_offset_x" value="0.0" />
     <xacro:property name="wheel_x_offset" value="${track_contact_length/2.0}" />
-    <xacro:property name="wheel_y" value="0.0" />
     <xacro:property name="wheel_z" value="${-track_height/4.0}" />
 
     <!-- Front cylinder -->
@@ -166,6 +179,6 @@
   <joint name="base_link_to_lidar_link" type="fixed">
     <parent link="base_link" />
     <child link="lidar_link" />
-    <origin xyz="$(arg lidar_x) $(arg lidar_y) $(arg lidar_z)" rpy="0 0 $(arg lidar_yaw)" />
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 0 ${lidar_yaw}" />
   </joint>
 </robot>
