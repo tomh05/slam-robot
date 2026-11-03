@@ -91,6 +91,8 @@ class LidarScanPublisher(Node):
         self.range_max = float(self.get_parameter('range_max').value)
         self.scale = float(self.get_parameter('distance_scale').value)
         self.invert = bool(self.get_parameter('invert').value)
+        if getattr(args, 'no_invert', False):
+            self.invert = False
         self.correct_angles = bool(self.get_parameter('correct_angles').value)
 
         self.pub = self.create_publisher(LaserScan, 'scan', 10)
@@ -204,12 +206,17 @@ def main(args=None):
     parser.add_argument('--range-max', type=float, default=8.0)
     parser.add_argument('--scale', type=float, default=DISTANCE_SCALE_TRIANGLE,
                         help='range_m = distance_q2 / scale (SDK: 4000)')
-    parser.add_argument('--invert', action='store_true',
-                        help='mirror the scan (if the cloud rotates the wrong '
-                             'way)')
+    parser.add_argument('--invert', action='store_true', default=True,
+                        help='mirror the scan (default: true)')
+    parser.add_argument('--no-invert', action='store_true',
+                        help='disable inversion')
     parser.add_argument('--no-correct', action='store_true',
                         help='disable the second order angle correction')
     cli = parser.parse_args(args)
+    if getattr(cli, 'no_invert', False):
+        cli.invert = False
+    else:
+        cli.invert = True  # default to inverted as per field testing
 
     rclpy.init(args=args)
     node = LidarScanPublisher(cli)
