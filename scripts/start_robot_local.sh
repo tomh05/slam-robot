@@ -51,8 +51,6 @@ echo "Motors: enabled"
 echo "Lidar: $LIDAR_PORT @ $LIDAR_BAUD (frame: $LIDAR_FRAME_ID), invert: $LIDAR_INVERT"
 echo ""
 
-# Start lidar scan publisher in background (uses its own CLI args, not ROS params)
-echo "Starting lidar_scan_publisher..."
 LIDAR_ARGS=(
     --port "$LIDAR_PORT"
     --baud "$LIDAR_BAUD"
@@ -62,26 +60,34 @@ if [ "$LIDAR_INVERT" = "false" ] || [ "$LIDAR_INVERT" = "0" ] || [ "$LIDAR_INVER
     LIDAR_ARGS+=(--no-invert)
 fi
 
-ros2 run lidar_scan_publisher lidar_scan_publisher "${LIDAR_ARGS[@]}" &
+# Start processes in their own process groups so we can kill cleanly
+setsid bash -c "ros2 run lidar_scan_publisher lidar_scan_publisher ${LIDAR_ARGS[*]}" &
 LIDAR_PID=$!
 
-# Give lidar a moment to start
 sleep 2
 
-# Start robot core with motors enabled
-echo "Starting robot_core (motors enabled)..."
-ros2 launch slam_robot_bringup robot_core.launch.py motors_enabled:=true &
+setsid bash -c "ros2 launch slam_robot_bringup robot_core.launch.py motors_enabled:=true" &
 CORE_PID=$!
 
+CLEANED_UP=0
 cleanup() {
+    if [ "$CLEANED_UP" -eq 1 ]; then
+        return
+    fi
+    CLEANED_UP=1
     echo ""
     echo "Shutting down..."
-    kill "$LIDAR_PID" "$CORE_PID" 2>/dev/null || true
-    wait "$LIDAR_PID" "$CORE_PID" 2>/dev/null || true
+    # Kill entire process groups
+    kill -TERM -"$LIDAR_PID" 2>/dev/null || true
+    kill -TERM -"$CORE_PID" 2>/dev/null || true
+    sleep 2
+    kill -KILL -"$LIDAR_PID" 2>/dev/null || true
+    kill -KILL -"$CORE_PID" 2>/dev/null || true
+    wait 2>/dev/null || true
 }
 
-trap cleanup INT TERM
+trap cleanup INT TERM EXIT
 
-# Wait for either process to exit
+# Wait for any process to exit
 wait -n "$LIDAR_PID" "$CORE_PID" 2>/dev/null || wait
 cleanup
