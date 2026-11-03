@@ -38,20 +38,35 @@ fi
 
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
 
+# Lidar configuration
+LIDAR_PORT="${LIDAR_PORT:-/dev/ttyUSB0}"
+LIDAR_BAUD="${LIDAR_BAUD:-153600}"
+LIDAR_FRAME_ID="${LIDAR_FRAME_ID:-lidar_link}"
+LIDAR_INVERT="${LIDAR_INVERT:-true}"
+
 echo "=== Starting robot stack (local on robot) ==="
 echo "Project: $PROJECT_ROOT"
 echo "ROS_DOMAIN_ID: $ROS_DOMAIN_ID"
 echo "Motors: enabled"
-echo "Lidar: starting lidar_scan_publisher (installed version)"
+echo "Lidar: $LIDAR_PORT @ $LIDAR_BAUD (frame: $LIDAR_FRAME_ID), invert: $LIDAR_INVERT"
 echo ""
 
-# Start lidar scan publisher in background (installed version takes no args)
-setsid bash -c "ros2 run lidar_scan_publisher lidar_scan_publisher" &
+LIDAR_ARGS=(
+    --port "$LIDAR_PORT"
+    --baud "$LIDAR_BAUD"
+    --frame-id "$LIDAR_FRAME_ID"
+)
+if [ "$LIDAR_INVERT" = "false" ] || [ "$LIDAR_INVERT" = "0" ] || [ "$LIDAR_INVERT" = "no" ]; then
+    LIDAR_ARGS+=(--no-invert)
+fi
+
+echo "Starting lidar_scan_publisher..."
+setsid bash -c "ros2 run lidar_scan_publisher lidar_scan_publisher ${LIDAR_ARGS[*]}" &
 LIDAR_PID=$!
 
 sleep 2
 
-# Start robot core with motors enabled
+echo "Starting robot_core (motors enabled)..."
 setsid bash -c "ros2 launch slam_robot_bringup robot_core.launch.py motors_enabled:=true" &
 CORE_PID=$!
 
