@@ -1,17 +1,10 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="slamrobot">
+
   <!--
-    Provisional tracked robot description.
-
-    Coordinate convention:
-      x forward, y left, z up.
-      base_footprint is on the floor at the approximate centre of rotation.
-      base_link is above it at the assumed centre-platform centre height.
-
-    Main track dimensions are initial measured values from the hardware
-    inventory. Platform and lidar dimensions are provisional assumptions until
-    the platform/lidar mount is built. Odometry still needs floor calibration
-    because tracked/skid-steer robots slip, especially while turning.
+    Tracked robot model for RViz2 RobotModel.
+    - Body (chassis) is a box
+    - Each track is represented as 2 cylinders with a box between them
   -->
 
   <xacro:arg name="track_separation" default="0.155" />
@@ -28,11 +21,20 @@
   <xacro:arg name="lidar_z" default="0.0555" />
   <xacro:arg name="lidar_yaw" default="0.0" />
 
+  <xacro:property name="wheel_radius" value="${track_height/2.0}" />
+  <xacro:property name="wheel_length" value="${track_width}" />
+  <xacro:property name="track_box_length" value="${track_contact_length}" />
+  <xacro:property name="track_box_width" value="${track_width}" />
+  <xacro:property name="track_box_height" value="${track_height * 0.4}" />
+
   <material name="chassis_dark">
     <color rgba="0.10 0.10 0.10 1.0" />
   </material>
   <material name="track_black">
     <color rgba="0.01 0.01 0.01 1.0" />
+  </material>
+  <material name="wheel_gray">
+    <color rgba="0.15 0.15 0.15 1.0" />
   </material>
   <material name="lidar_blue">
     <color rgba="0.1 0.3 0.8 1.0" />
@@ -46,6 +48,7 @@
     <origin xyz="0 0 $(arg base_link_z)" rpy="0 0 0" />
   </joint>
 
+  <!-- Robot body is a box -->
   <link name="base_link">
     <visual>
       <origin xyz="0 0 0" rpy="0 0 0" />
@@ -68,31 +71,81 @@
   </link>
 
   <xacro:macro name="track" params="name y">
-    <link name="${name}">
+    <xacro:property name="track_center_offset_x" value="0.0" />
+    <xacro:property name="wheel_x_offset" value="${track_contact_length/2.0}" />
+    <xacro:property name="wheel_y" value="0.0" />
+    <xacro:property name="wheel_z" value="${-track_height/4.0}" />
+
+    <!-- Front cylinder -->
+    <link name="${name}_front_wheel">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2.0} 0 0" />
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_length}" />
+        </geometry>
+        <material name="wheel_gray" />
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2.0} 0 0" />
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_length}" />
+        </geometry>
+      </collision>
+    </link>
+    <joint name="base_link_to_${name}_front_wheel" type="fixed">
+      <parent link="base_link" />
+      <child link="${name}_front_wheel" />
+      <origin xyz="${wheel_x_offset} ${y} ${wheel_z}" rpy="0 0 0" />
+    </joint>
+
+    <!-- Rear cylinder -->
+    <link name="${name}_rear_wheel">
+      <visual>
+        <origin xyz="0 0 0" rpy="${pi/2.0} 0 0" />
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_length}" />
+        </geometry>
+        <material name="wheel_gray" />
+      </visual>
+      <collision>
+        <origin xyz="0 0 0" rpy="${pi/2.0} 0 0" />
+        <geometry>
+          <cylinder radius="${wheel_radius}" length="${wheel_length}" />
+        </geometry>
+      </collision>
+    </link>
+    <joint name="base_link_to_${name}_rear_wheel" type="fixed">
+      <parent link="base_link" />
+      <child link="${name}_rear_wheel" />
+      <origin xyz="${-wheel_x_offset} ${y} ${wheel_z}" rpy="0 0 0" />
+    </joint>
+
+    <!-- Box between the two cylinders to represent the track belt -->
+    <link name="${name}_belt">
       <visual>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <box size="$(arg track_overall_length) $(arg track_width) $(arg track_height)" />
+          <box size="${track_box_length} ${track_box_width} ${track_box_height}" />
         </geometry>
         <material name="track_black" />
       </visual>
       <collision>
         <origin xyz="0 0 0" rpy="0 0 0" />
         <geometry>
-          <box size="$(arg track_overall_length) $(arg track_width) $(arg track_height)" />
+          <box size="${track_box_length} ${track_box_width} ${track_box_height}" />
         </geometry>
       </collision>
     </link>
-    <joint name="base_link_to_${name}" type="fixed">
+    <joint name="base_link_to_${name}_belt" type="fixed">
       <parent link="base_link" />
-      <child link="${name}" />
-      <origin xyz="0 ${y} -0.0155" rpy="0 0 0" />
+      <child link="${name}_belt" />
+      <origin xyz="0 ${y} ${wheel_z}" rpy="0 0 0" />
     </joint>
   </xacro:macro>
 
-  <!-- Track y offsets use the measured/derived 0.155 m centre-to-centre track separation. -->
-  <xacro:track name="left_track_link" y="0.0775" />
-  <xacro:track name="right_track_link" y="-0.0775" />
+  <!-- Two tracks with measured centre-to-centre separation -->
+  <xacro:track name="left_track" y="0.0775" />
+  <xacro:track name="right_track" y="-0.0775" />
 
   <link name="lidar_link">
     <visual>
