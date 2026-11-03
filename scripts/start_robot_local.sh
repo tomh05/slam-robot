@@ -38,34 +38,20 @@ fi
 
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
 
-# Lidar configuration
-LIDAR_PORT="${LIDAR_PORT:-/dev/ttyUSB0}"
-LIDAR_BAUD="${LIDAR_BAUD:-153600}"
-LIDAR_FRAME_ID="${LIDAR_FRAME_ID:-lidar_link}"
-LIDAR_INVERT="${LIDAR_INVERT:-true}"
-
 echo "=== Starting robot stack (local on robot) ==="
 echo "Project: $PROJECT_ROOT"
 echo "ROS_DOMAIN_ID: $ROS_DOMAIN_ID"
 echo "Motors: enabled"
-echo "Lidar: $LIDAR_PORT @ $LIDAR_BAUD (frame: $LIDAR_FRAME_ID), invert: $LIDAR_INVERT"
+echo "Lidar: starting lidar_scan_publisher (installed version)"
 echo ""
 
-LIDAR_ARGS=(
-    --port "$LIDAR_PORT"
-    --baud "$LIDAR_BAUD"
-    --frame-id "$LIDAR_FRAME_ID"
-)
-if [ "$LIDAR_INVERT" = "false" ] || [ "$LIDAR_INVERT" = "0" ] || [ "$LIDAR_INVERT" = "no" ]; then
-    LIDAR_ARGS+=(--no-invert)
-fi
-
-# Start processes in their own process groups so we can kill cleanly
-setsid bash -c "ros2 run lidar_scan_publisher lidar_scan_publisher ${LIDAR_ARGS[*]}" &
+# Start lidar scan publisher in background (installed version takes no args)
+setsid bash -c "ros2 run lidar_scan_publisher lidar_scan_publisher" &
 LIDAR_PID=$!
 
 sleep 2
 
+# Start robot core with motors enabled
 setsid bash -c "ros2 launch slam_robot_bringup robot_core.launch.py motors_enabled:=true" &
 CORE_PID=$!
 
@@ -77,7 +63,6 @@ cleanup() {
     CLEANED_UP=1
     echo ""
     echo "Shutting down..."
-    # Kill entire process groups
     kill -TERM -"$LIDAR_PID" 2>/dev/null || true
     kill -TERM -"$CORE_PID" 2>/dev/null || true
     sleep 2
@@ -88,6 +73,5 @@ cleanup() {
 
 trap cleanup INT TERM EXIT
 
-# Wait for any process to exit
 wait -n "$LIDAR_PID" "$CORE_PID" 2>/dev/null || wait
 cleanup
