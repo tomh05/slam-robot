@@ -37,7 +37,7 @@ arduino_base_node:
 
     left_encoder_sign: 1.0
     right_encoder_sign: 1.0
-    left_command_sign: 1.0
+    left_command_sign: -1.0
     right_command_sign: 1.0
 
     max_linear_mps: 0.20
