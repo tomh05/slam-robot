@@ -50,13 +50,12 @@ echo "Motors: enabled"
 echo "Lidar: $LIDAR_PORT @ $LIDAR_BAUD (frame: $LIDAR_FRAME_ID)"
 echo ""
 
-# Start lidar scan publisher in background
+# Start lidar scan publisher in background (uses its own CLI args, not ROS params)
 echo "Starting lidar_scan_publisher..."
 ros2 run lidar_scan_publisher lidar_scan_publisher \
-    --ros-args \
-    -p port:="$LIDAR_PORT" \
-    -p baud:="$LIDAR_BAUD" \
-    -p frame_id:="$LIDAR_FRAME_ID" &
+    --port "$LIDAR_PORT" \
+    --baud "$LIDAR_BAUD" \
+    --frame-id "$LIDAR_FRAME_ID" &
 LIDAR_PID=$!
 
 # Give lidar a moment to start
