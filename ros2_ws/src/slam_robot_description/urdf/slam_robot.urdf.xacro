@@ -19,7 +19,7 @@
   <xacro:arg name="lidar_x" default="0.0" />
   <xacro:arg name="lidar_y" default="0.0" />
   <xacro:arg name="lidar_z" default="0.0555" />
-  <xacro:arg name="lidar_yaw" default="0.0" />
+  <xacro:arg name="lidar_yaw" default="${pi + 5*pi/180}" /> <!-- 185 degrees -->
 
   <xacro:property name="track_separation" value="$(arg track_separation)" />
   <xacro:property name="track_contact_length" value="$(arg track_contact_length)" />
