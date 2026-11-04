@@ -71,8 +71,8 @@ const unsigned long CONTROL_PERIOD_MS = 20;  // 50 Hz
 const unsigned long REPORT_PERIOD_MS = 50;   // 20 Hz
 const unsigned long COMMAND_TIMEOUT_MS = 400;
 
-const int MAX_PWM = 180;        // keep conservative for first tests; max is 255
-const int MIN_EFFECTIVE_PWM = 0; // can be raised later to overcome stiction
+const int MAX_PWM = 200;        // keep conservative for first tests; max is 255
+const int MIN_EFFECTIVE_PWM = 40; // raised to help overcome stiction
 
 // Direction inversion flags for motor outputs. Change during calibration.
 // Encoder direction is now inferred from commanded motor direction, so there are
@@ -315,14 +315,19 @@ void controlLoop() {
   // Encoder is single-channel (counts only up, magnitude only). Direction is
   // inferred from the commanded motor direction: negate the delta when the target
   // velocity is negative so the PID and reported tps have the correct polarity.
-  if (left_target_tps < 0) left_delta = -left_delta;
-  if (right_target_tps < 0) right_delta = -right_delta;
-
-  // Accumulate the direction-corrected delta into a signed position that is
-  // reported to the Pi. Without this, the E line would carry always-positive
-  // counts and the ROS node could not tell forward from backward.
-  left_position += left_delta;
-  right_position += right_delta;
+  // Only accumulate position when actively driving to avoid counting passive motion.
+  if (left_target_tps != 0.0f) {
+    if (left_target_tps < 0.0f) left_delta = -left_delta;
+    left_position += left_delta;
+  } else {
+    left_delta = 0;
+  }
+  if (right_target_tps != 0.0f) {
+    if (right_target_tps < 0.0f) right_delta = -right_delta;
+    right_position += right_delta;
+  } else {
+    right_delta = 0;
+  }
 
   float dt_s = elapsed_ms / 1000.0f;
   if (dt_s <= 0.0f) {
