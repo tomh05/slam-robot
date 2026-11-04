@@ -9,7 +9,7 @@ try:
     import serial
 except ImportError:  # pragma: no cover
     serial = None
-DEFAULT_PORT = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
+DEFAULT_PORT = "/dev/arduino"
 Status = Tuple[int, int, int, int, int, int, int]
 def parse_status(line: str) -> Optional[Status]:
     parts = line.split()
