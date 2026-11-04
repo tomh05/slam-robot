@@ -44,25 +44,25 @@
 
 // MX1508 motor driver PWM outputs (from the Nano's perspective).
 // All selected pins support PWM on classic Nano.
-const uint8_t LEFT_PWM_A = 5;   // HW-354 INA
-const uint8_t LEFT_PWM_B = 6;   // HW-354 INB
-const uint8_t RIGHT_PWM_A = 9;  // HW-354 INC
-const uint8_t RIGHT_PWM_B = 10; // HW-354 IND
+const uint8_t LEFT_PWM_A = 6;   // HW-354 INC
+const uint8_t LEFT_PWM_B = 5;   // HW-354 IND
+const uint8_t RIGHT_PWM_A = 9;  // HW-354 INA
+const uint8_t RIGHT_PWM_B = 10; // HW-354 INB
 
 // Encoder/hall inputs, matching the existing board pinout.
 // Both encoders have a hardware fault: only S1 produces pulses, S2 is dead.
-// The left encoder counts on S1 (D4 / PD4 / PCINT20).
-// The right encoder counts on S1 (D7 / PD7 / PCINT23).
+// The left encoder counts on S1 (D7 / PD7 / PCINT23).
+// The right encoder counts on S1 (D4 / PD4 / PCINT20).
 // Both D4 and D7 are on port D and share the PCINT2 pin-change interrupt group.
 //
 // Both encoders are used as single-channel (x1) tachometers: only distance
 // (magnitude) comes from the encoder step count. Direction (forward/backward)
 // is inferred from the commanded motor direction (target velocity sign) in the
 // control loop, as the hardware cannot provide it.
-const uint8_t LEFT_ENC_S1 = 4;    // Motor A S1 — LIVE channel, counted via PCINT2
-const uint8_t LEFT_ENC_S2 = 2;    // Motor A S2 — DEAD channel, debug only
-const uint8_t RIGHT_ENC_S1 = 7;   // Motor B S1 — LIVE channel, counted via PCINT2
-const uint8_t RIGHT_ENC_S2 = 3;   // Motor B S2 — DEAD channel, debug only
+const uint8_t LEFT_ENC_S1 = 7;    // Motor A S1 — LIVE channel, counted via PCINT2
+const uint8_t LEFT_ENC_S2 = 3;    // Motor A S2 — DEAD channel, debug only
+const uint8_t RIGHT_ENC_S1 = 4;   // Motor B S1 — LIVE channel, counted via PCINT2
+const uint8_t RIGHT_ENC_S2 = 2;   // Motor B S2 — DEAD channel, debug only
 
 // ---------------- Configuration ----------------
 
@@ -132,17 +132,17 @@ uint8_t input_len = 0;
 
 // ---------------- Encoder interrupts ----------------
 
-// Both encoders: the live signal for each motor is on S1 (left = D4, right = D7).
+// Both encoders: the live signal for each motor is on S1 (left = D7, right = D4).
 // Both D4 and D7 are on port D, so they share the PCINT2 pin-change interrupt
 // group. Pin-change interrupts fire on both edges, so compare the current port
 // state with the previous one and count only low-to-high transitions.
 ISR(PCINT2_vect) {
   uint8_t current_portd = PIND;
   uint8_t rising_edges = current_portd & ~last_encoder_portd;
-  if (rising_edges & _BV(PD4)) {
+  if (rising_edges & _BV(PD7)) {
     left_count++;
   }
-  if (rising_edges & _BV(PD7)) {
+  if (rising_edges & _BV(PD4)) {
     right_count++;
   }
   last_encoder_portd = current_portd;
@@ -459,16 +459,16 @@ void setup() {
   last_right_s2_level = digitalRead(RIGHT_ENC_S2);
 
   // Both encoders use pin-change interrupts on PCINT2 (PD0-PD7 group):
-  //   Left encoder: D4 (PD4 / PCINT20, S1 — the live channel)
-  //   Right encoder: D7 (PD7 / PCINT23, S1 — the live channel)
+  //   Left encoder: D7 (PD7 / PCINT23, S1 — the live channel)
+  //   Right encoder: D4 (PD4 / PCINT20, S1 — the live channel)
   // S2 channels (D2/D3) are dead on both motors and are for debugging only.
   // NOTE: D0/D1 carry serial traffic, so PCINT2_vect also fires during UART RX,
   // but the ISR only checks PD4 and PD7, so it is harmless — minor ISR overhead
   // during serial bursts, negligible for a slow tracked robot.
   last_encoder_portd = PIND;
   PCICR |= _BV(PCIE2);
-  PCMSK2 |= _BV(PCINT20); // D4 = PD4 = PCINT20 (left encoder S1)
-  PCMSK2 |= _BV(PCINT23); // D7 = PD7 = PCINT23 (right encoder S1)
+  PCMSK2 |= _BV(PCINT23); // D7 = PD7 = PCINT23 (left encoder S1)
+  PCMSK2 |= _BV(PCINT20); // D4 = PD4 = PCINT20 (right encoder S1)
   PCIFR |= _BV(PCIF2);    // clear any pending flag
 
   Serial.begin(SERIAL_BAUD);
