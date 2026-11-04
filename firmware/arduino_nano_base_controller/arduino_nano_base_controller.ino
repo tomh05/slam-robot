@@ -78,7 +78,7 @@ const int MIN_EFFECTIVE_PWM = 40; // raised to help overcome stiction
 // Encoder direction is now inferred from commanded motor direction, so there are
 // no separate encoder-sign flags.
 const int LEFT_MOTOR_SIGN = 1;
-const int RIGHT_MOTOR_SIGN = 1;
+const int RIGHT_MOTOR_SIGN = -1;
 
 // Simple PI controller gains. These are placeholders.
 float KP = 0.8f;

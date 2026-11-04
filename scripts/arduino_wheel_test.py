@@ -114,8 +114,8 @@ def main() -> int:
     parser.add_argument(
         "--speed",
         type=int,
-        default=20,
-        help="target speed in ticks/sec; default: 20",
+        default=10,
+        help="target speed in ticks/sec; default: 10",
     )
     parser.add_argument(
         "--duration",
