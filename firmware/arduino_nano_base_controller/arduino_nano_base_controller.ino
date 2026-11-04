@@ -326,7 +326,10 @@ void controlLoop() {
   }
   if (right_target_tps != 0.0f) {
     if (right_target_tps < 0.0f) right_delta = -right_delta;
-    right_position += right_delta;
+    // The right motor command is inverted so positive external commands drive
+    // the robot forward. Report its position in the same forward-positive
+    // convention as the left side.
+    right_position -= right_delta;
   } else {
     right_delta = 0;
   }
