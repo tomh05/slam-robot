@@ -327,3 +327,15 @@ After the Pi boots and has minimal ROS installed:
 ## Sensitive information note
 
 The old mounted SD card had Wi-Fi credentials in `/Volumes/writable/etc/netplan/50-cloud-init.yaml`. They were not copied into project docs. Avoid committing Wi-Fi credentials, SSH keys, or old shell histories.
+
+
+## Recent updates (2025-11-03/04)
+
+- Added `scripts/start_robot_local.sh` to run the full stack directly on the robot (sources ROS/workspace, starts `lidar_scan_publisher` and `slam_robot_bringup` with motors enabled; configurable via `LIDAR_PORT`, `LIDAR_BAUD`, `LIDAR_FRAME_ID`, `LIDAR_INVERT`, `ROS_DOMAIN_ID`).
+- `lidar_scan_publisher`: source supports CLI args; script made compatible with rebuilt source. Frame set to `lidar_link`. Inversion controlled via `LIDAR_INVERT` (node defaults to inverted).
+- Updated robot URDF (`slam_robot_description/urdf/slam_robot.urdf.xacro`) so body is a box and each track is modeled as two cylinders with a box between them. Fixed xacro issues.
+- Updated RViz config (`slam_robot_bringup/rviz/slam_robot.rviz`) to show RobotModel, Grid, Axes on `lidar_link`, and LaserScan on `/scan`.
+- Arduino firmware pin mapping swapped for left/right motors/encoders to correct track direction; comments/style restored. Upload via `scripts/upload_arduino.sh` (arduino-cli, FQBN `arduino:avr:nano:cpu=atmega328old`).
+- Calibration: use `/cmd_vel` and watch Arduino status on `/arduino_base_node/status_raw`; tune `left_command_sign`/`right_command_sign` and per-wheel scaling as needed.
+- Cleaned up YDLIDAR remnants: removed `scripts/install_ydlidar_ros2_driver.sh` and `ros2_ws/src/YDLidar-SDK` (using custom `lidar_scan_publisher`).
+- Fixed `lidar_scan_publisher/setup.cfg` dash-separated options to use underscores.
