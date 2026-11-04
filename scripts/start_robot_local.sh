@@ -39,7 +39,7 @@ fi
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
 
 # Lidar configuration
-LIDAR_PORT="${LIDAR_PORT:-/dev/ttyUSB0}"
+LIDAR_PORT="${LIDAR_PORT:-/dev/lidar}"
 LIDAR_BAUD="${LIDAR_BAUD:-153600}"
 LIDAR_FRAME_ID="${LIDAR_FRAME_ID:-lidar_link}"
 LIDAR_INVERT="${LIDAR_INVERT:-true}"
