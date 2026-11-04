@@ -159,17 +159,17 @@ Develop from the laptop but run hardware code on the Pi.
 
 ### Goals
 
-Validate the likely MB_1R2T serial lidar and publish valid lidar scans in ROS 2.
+Maintain and validate the current lidar integration and scan quality in ROS 2.
 
 ### Tasks
 
-- [ ] Read [`lidar-module-notes.md`](lidar-module-notes.md).
-- [ ] Read [`lidar-mb-1r2t-ros2-port.md`](lidar-mb-1r2t-ros2-port.md).
+- [x] Read [`lidar-module-notes.md`](lidar-module-notes.md).
+- [x] Read [`lidar-mb-1r2t-ros2-port.md`](lidar-mb-1r2t-ros2-port.md).
 - [ ] Confirm connector orientation against the saved pinout screenshot.
 - [ ] Power the lidar from a current-limited/stable 5 V supply.
 - [ ] Measure serial output voltage level before connecting it to Pi UART/GPIO.
 - [ ] Prefer initial capture using a USB-UART adapter with appropriate input-voltage tolerance or level shifting.
-- [ ] Capture raw serial data at the two likely baud rates:
+- [x] Capture raw serial data at the two likely baud rates:
 
 ```bash
 python3 -m pip install pyserial
@@ -178,9 +178,9 @@ python3 scripts/lidar_capture_serial.py --port /dev/ttyUSB0 --baud 158700 --seco
 python3 scripts/lidar_capture_serial.py --port /dev/ttyUSB0 --baud 153600 --seconds 5 --out captures/mb1r2t_153600.bin
 ```
 
-- [ ] Look for repeated `AA 55` packet headers in the capture.
-- [ ] Port the MB_1R2T parser to a ROS 2 node, probably as package `slam_robot_lidar_mb1r2t`.
-- [ ] Publish `sensor_msgs/LaserScan` on `/scan` using `frame_id:=lidar_link`.
+- [x] Confirm packet framing/checksum and repeated `AA 55` headers in captures.
+- [x] Implement ROS 2 lidar node in `ros2_ws/src/lidar_scan_publisher`.
+- [x] Publish `sensor_msgs/LaserScan` on `/scan` using `frame_id:=lidar_link`.
 - [ ] Optionally test `YDLIDAR/ydlidar_ros2_driver`, but treat it as secondary.
 - [ ] Once a USB serial device is used on the Pi, find device path:
 
@@ -208,14 +208,14 @@ ros2 topic hz /scan
 
 - [ ] Visualise in RViz 2.
 
-### Likely driver path
+### Driver path
 
-For this likely MB_1R2T lidar, the primary source material is:
+For this hardware, reference source material was:
 
 - <https://github.com/stdlogicvector/MB_1R2T_LIDAR_Demo>
 - <https://github.com/Vidicon/mb_1r2t_ros>
 
-The official `YDLIDAR/ydlidar_ros2_driver` exists and likely uses its `humble` branch for Jazzy/Humble-era ROS 2, but it is a fallback/experiment for this module rather than the primary path.
+The official `YDLIDAR/ydlidar_ros2_driver` remains a fallback/experiment path rather than the primary in-repo integration.
 
 ### Acceptance test
 

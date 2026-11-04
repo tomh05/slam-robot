@@ -98,14 +98,12 @@ Responsibilities:
 
 ### 4.1 Lidar driver
 
-The current module is now likely identified as an **MB_1R2T** or compatible 5 V serial lidar. Community code exists and appears to parse its direct serial stream.
+The lidar packet format has been validated as YDLIDAR-compatible and is integrated through an in-repo ROS 2 package.
 
-Preferred path for this module:
+Primary path for this module:
 
-- Create a ROS 2 package, probably `slam_robot_lidar_mb1r2t`.
-- Port the parser logic from:
-  - <https://github.com/stdlogicvector/MB_1R2T_LIDAR_Demo>
-  - <https://github.com/Vidicon/mb_1r2t_ros>
+- Use `ros2_ws/src/lidar_scan_publisher` as the project lidar driver.
+- Keep protocol logic in the unit-testable decoder module.
 - Publish `sensor_msgs/LaserScan` on `/scan`.
 - Use `frame_id:=lidar_link`.
 
@@ -113,7 +111,7 @@ Secondary experiment:
 
 - `ydlidar_ros2_driver` from YDLIDAR's current ROS 2 repositories does exist.
 - Its README currently says to use the `humble` branch for Humble/Jazzy-era ROS 2.
-- It may be worth testing, but it is not the primary path because this module is not a clearly supported named YDLIDAR retail model and may stream without the usual SDK command protocol.
+- It may be worth testing as a cross-check or fallback, but it is not the current integration path.
 
 Alternatives depending on actual hardware:
 
@@ -124,9 +122,9 @@ Alternatives depending on actual hardware:
 Important note:
 
 - The existing `lidar-resources/ydlidar_ros_driver-master` has a ROS 1 `catkin` `package.xml`, so it is useful as reference only.
-- `Vidicon/mb_1r2t_ros` is also ROS 1/catkin, but it is very useful source material for a ROS 2 port.
+- `Vidicon/mb_1r2t_ros` is also ROS 1/catkin and remains historical source material only.
 - See [`lidar-module-notes.md`](lidar-module-notes.md) for pinout screenshots and serial capture procedure.
-- See [`lidar-mb-1r2t-ros2-port.md`](lidar-mb-1r2t-ros2-port.md) for the MB_1R2T ROS 2 port plan.
+- See [`lidar-protocol-findings-2025-10-23.md`](lidar-protocol-findings-2025-10-23.md) for protocol validation and decoder notes.
 
 ### 4.2 Base drive and odometry
 
@@ -286,9 +284,8 @@ slam-robot/
         include/
         config/
         package.xml
+      lidar_scan_publisher/
       slam_robot_msgs/              # only if custom messages become necessary
-      vendor_drivers/
-        ydlidar_ros2_driver/         # optional source checkout, if needed
 ```
 
 Package responsibilities:
