@@ -51,8 +51,8 @@ const uint8_t RIGHT_PWM_B = 10; // HW-354 INB
 
 // Encoder/hall inputs, matching the existing board pinout.
 // Both encoders have a hardware fault: only S1 produces pulses, S2 is dead.
-// The left encoder counts on S1 (D4 / PD4 / PCINT20).
-// The right encoder counts on S1 (D7 / PD7 / PCINT23).
+// The left encoder counts on S1 (D7 / PD7 / PCINT23).
+// The right encoder counts on S1 (D4 / PD4 / PCINT20).
 // Both D4 and D7 are on port D and share the PCINT2 pin-change interrupt group.
 //
 // Both encoders are used as single-channel (x1) tachometers: only distance
@@ -121,6 +121,7 @@ uint8_t last_left_s1_level = 0;
 uint8_t last_left_s2_level = 0;
 uint8_t last_right_s1_level = 0;
 uint8_t last_right_s2_level = 0;
+volatile uint8_t last_encoder_portd = 0;
 unsigned long left_s1_edges = 0;
 unsigned long left_s2_edges = 0;
 unsigned long right_s1_edges = 0;
@@ -133,18 +134,18 @@ uint8_t input_len = 0;
 
 // Both encoders: the live signal for each motor is on S1 (left = D7, right = D4).
 // Both D4 and D7 are on port D, so they share the PCINT2 pin-change interrupt
-// group. The ISR fires on both edges; we only count rising edges to match the
-// original RISING-edge behaviour. D0/D1 (also in PCINT2) carry serial traffic,
-// so the ISR also fires during UART RX, but it only checks PD7 and PD4, so it
-// is harmless — minor ISR overhead during serial bursts, negligible for a slow
-// tracked robot.
+// group. Pin-change interrupts fire on both edges, so compare the current port
+// state with the previous one and count only low-to-high transitions.
 ISR(PCINT2_vect) {
-  if (PIND & _BV(PD7)) {
+  uint8_t current_portd = PIND;
+  uint8_t rising_edges = current_portd & ~last_encoder_portd;
+  if (rising_edges & _BV(PD7)) {
     left_count++;
   }
-  if (PIND & _BV(PD4)) {
+  if (rising_edges & _BV(PD4)) {
     right_count++;
   }
+  last_encoder_portd = current_portd;
 }
 
 // ---------------- Motor output ----------------
@@ -268,7 +269,9 @@ int updateOneMotor(
     return 0;
   }
 
-  float error = target_tps - measured_tps;
+  float target_magnitude = abs(target_tps);
+  float measured_magnitude = abs(measured_tps);
+  float error = target_magnitude - measured_magnitude;
   integral += error * dt_s;
   integral = constrain(integral, -1000.0f, 1000.0f);
   float derivative = (error - last_error) / dt_s;
@@ -276,15 +279,16 @@ int updateOneMotor(
 
   float output = KP * error + KI * integral + KD * derivative;
 
-  // This controller output is interpreted as a PWM delta around current command.
-  int new_pwm = current_pwm + (int)output;
-  new_pwm = constrain(new_pwm, -MAX_PWM, MAX_PWM);
+  // Feedback changes PWM magnitude only. Direction always follows the target,
+  // so an overspeed correction cannot accidentally reverse the motor.
+  int new_pwm_magnitude = abs(current_pwm) + (int)output;
+  new_pwm_magnitude = constrain(new_pwm_magnitude, 0, MAX_PWM);
 
-  if (new_pwm != 0 && abs(new_pwm) < MIN_EFFECTIVE_PWM) {
-    new_pwm = (new_pwm > 0) ? MIN_EFFECTIVE_PWM : -MIN_EFFECTIVE_PWM;
+  if (new_pwm_magnitude != 0 && new_pwm_magnitude < MIN_EFFECTIVE_PWM) {
+    new_pwm_magnitude = MIN_EFFECTIVE_PWM;
   }
 
-  return new_pwm;
+  return (target_tps > 0.0f) ? new_pwm_magnitude : -new_pwm_magnitude;
 }
 
 void controlLoop() {
@@ -455,15 +459,16 @@ void setup() {
   last_right_s2_level = digitalRead(RIGHT_ENC_S2);
 
   // Both encoders use pin-change interrupts on PCINT2 (PD0-PD7 group):
-  //   Left encoder: D4 (PD4 / PCINT20, S1 — the live channel)
-  //   Right encoder: D7 (PD7 / PCINT23, S1 — the live channel)
+  //   Left encoder: D7 (PD7 / PCINT23, S1 — the live channel)
+  //   Right encoder: D4 (PD4 / PCINT20, S1 — the live channel)
   // S2 channels (D2/D3) are dead on both motors and are for debugging only.
   // NOTE: D0/D1 carry serial traffic, so PCINT2_vect also fires during UART RX,
   // but the ISR only checks PD4 and PD7, so it is harmless — minor ISR overhead
   // during serial bursts, negligible for a slow tracked robot.
+  last_encoder_portd = PIND;
   PCICR |= _BV(PCIE2);
-  PCMSK2 |= _BV(PCINT20); // D4 = PD4 = PCINT20 (left encoder S1)
-  PCMSK2 |= _BV(PCINT23); // D7 = PD7 = PCINT23 (right encoder S1)
+  PCMSK2 |= _BV(PCINT23); // D7 = PD7 = PCINT23 (left encoder S1)
+  PCMSK2 |= _BV(PCINT20); // D4 = PD4 = PCINT20 (right encoder S1)
   PCIFR |= _BV(PCIF2);    // clear any pending flag
 
   Serial.begin(SERIAL_BAUD);
