@@ -71,6 +71,8 @@ const unsigned long COMMAND_TIMEOUT_MS = 400;
 
 const int MAX_PWM = 200;        // keep conservative for first tests; max is 255
 const int MIN_EFFECTIVE_PWM = 40; // raised to help overcome stiction
+const float TARGET_RAMP_TPS_PER_S = 200.0f;
+const int MAX_PWM_STEP = 8;
 
 // Direction inversion flags for motor outputs. Change during calibration.
 // Encoder direction is now inferred from commanded motor direction, so there are
@@ -98,6 +100,8 @@ volatile long right_position = 0;
 long last_left_count = 0;
 long last_right_count = 0;
 
+float left_command_tps = 0.0f;
+float right_command_tps = 0.0f;
 float left_target_tps = 0.0f;
 float right_target_tps = 0.0f;
 float left_measured_tps = 0.0f;
@@ -170,6 +174,8 @@ void applyMotorOutputs() {
 }
 
 void stopMotors() {
+  left_command_tps = 0.0f;
+  right_command_tps = 0.0f;
   left_target_tps = 0.0f;
   right_target_tps = 0.0f;
   left_integral = 0.0f;
@@ -193,8 +199,8 @@ void handleLine(char *line) {
     long l = 0;
     long r = 0;
     if (sscanf(line + 1, "%ld %ld", &l, &r) == 2) {
-      left_target_tps = (float)l;
-      right_target_tps = -(float)r;
+      left_command_tps = (float)l;
+      right_command_tps = -(float)r;
       last_command_ms = millis();
       // Do not acknowledge every velocity command: the Pi sends these at
       // control-loop rate, and ACK spam can interleave with periodic status.
@@ -270,20 +276,36 @@ int updateOneMotor(
   float target_magnitude = abs(target_tps);
   float measured_magnitude = abs(measured_tps);
   float error = target_magnitude - measured_magnitude;
-  integral += error * dt_s;
-  integral = constrain(integral, -1000.0f, 1000.0f);
+  float candidate_integral = constrain(
+    integral + error * dt_s,
+    -1000.0f,
+    1000.0f
+  );
   float derivative = (error - last_error) / dt_s;
-  last_error = error;
 
-  float output = KP * error + KI * integral + KD * derivative;
+  float output = KP * error + KI * candidate_integral + KD * derivative;
 
   // Feedback changes PWM magnitude only. Direction always follows the target,
   // so an overspeed correction cannot accidentally reverse the motor.
-  int new_pwm_magnitude = abs(current_pwm) + (int)output;
-  new_pwm_magnitude = constrain(new_pwm_magnitude, 0, MAX_PWM);
+  int requested_pwm_magnitude = abs(current_pwm) + (int)output;
+  bool saturated_high = requested_pwm_magnitude > MAX_PWM && output > 0.0f;
+  bool saturated_low = requested_pwm_magnitude < 0 && output < 0.0f;
+  if (!saturated_high && !saturated_low) {
+    integral = candidate_integral;
+  }
+  last_error = error;
+
+  int new_pwm_magnitude = constrain(requested_pwm_magnitude, 0, MAX_PWM);
 
   if (new_pwm_magnitude != 0 && new_pwm_magnitude < MIN_EFFECTIVE_PWM) {
     new_pwm_magnitude = MIN_EFFECTIVE_PWM;
+  }
+
+  int current_pwm_magnitude = abs(current_pwm);
+  if (new_pwm_magnitude > current_pwm_magnitude + MAX_PWM_STEP) {
+    new_pwm_magnitude = current_pwm_magnitude + MAX_PWM_STEP;
+  } else if (new_pwm_magnitude + MAX_PWM_STEP < current_pwm_magnitude) {
+    new_pwm_magnitude = current_pwm_magnitude - MAX_PWM_STEP;
   }
 
   return (target_tps > 0.0f) ? new_pwm_magnitude : -new_pwm_magnitude;
@@ -301,6 +323,18 @@ void controlLoop() {
     stopMotors();
     return;
   }
+
+  float max_target_step = TARGET_RAMP_TPS_PER_S * (elapsed_ms / 1000.0f);
+  left_target_tps += constrain(
+    left_command_tps - left_target_tps,
+    -max_target_step,
+    max_target_step
+  );
+  right_target_tps += constrain(
+    right_command_tps - right_target_tps,
+    -max_target_step,
+    max_target_step
+  );
 
   long left_now;
   long right_now;
