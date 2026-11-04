@@ -44,10 +44,10 @@
 
 // MX1508 motor driver PWM outputs (from the Nano's perspective).
 // All selected pins support PWM on classic Nano.
-const uint8_t LEFT_PWM_A = 9;   // HW-354 INA
-const uint8_t LEFT_PWM_B = 10;  // HW-354 INB
-const uint8_t RIGHT_PWM_A = 6;  // HW-354 INC
-const uint8_t RIGHT_PWM_B = 5;  // HW-354 IND
+const uint8_t LEFT_PWM_A = 6;   // HW-354 INC
+const uint8_t LEFT_PWM_B = 5;   // HW-354 IND
+const uint8_t RIGHT_PWM_A = 9;  // HW-354 INA
+const uint8_t RIGHT_PWM_B = 10; // HW-354 INB
 
 // Encoder/hall inputs, matching the existing board pinout.
 // Both encoders have a hardware fault: only S1 produces pulses, S2 is dead.
@@ -59,10 +59,10 @@ const uint8_t RIGHT_PWM_B = 5;  // HW-354 IND
 // (magnitude) comes from the encoder step count. Direction (forward/backward)
 // is inferred from the commanded motor direction (target velocity sign) in the
 // control loop, as the hardware cannot provide it.
-const uint8_t LEFT_ENC_S1 = 4;    // Motor B S1 — LIVE channel, counted via PCINT2
-const uint8_t LEFT_ENC_S2 = 2;    // Motor B S2 — DEAD channel, debug only
-const uint8_t RIGHT_ENC_S1 = 7;   // Motor A S1 — LIVE channel, counted via PCINT2
-const uint8_t RIGHT_ENC_S2 = 3;   // Motor A S2 — DEAD channel, debug only
+const uint8_t LEFT_ENC_S1 = 7;    // Motor A S1 — LIVE channel, counted via PCINT2
+const uint8_t LEFT_ENC_S2 = 3;    // Motor A S2 — DEAD channel, debug only
+const uint8_t RIGHT_ENC_S1 = 4;   // Motor B S1 — LIVE channel, counted via PCINT2
+const uint8_t RIGHT_ENC_S2 = 2;   // Motor B S2 — DEAD channel, debug only
 
 // ---------------- Configuration ----------------
 
@@ -131,18 +131,18 @@ uint8_t input_len = 0;
 
 // ---------------- Encoder interrupts ----------------
 
-// Both encoders: the live signal for each motor is on S1 (left = D4, right = D7).
+// Both encoders: the live signal for each motor is on S1 (left = D7, right = D4).
 // Both D4 and D7 are on port D, so they share the PCINT2 pin-change interrupt
 // group. The ISR fires on both edges; we only count rising edges to match the
 // original RISING-edge behaviour. D0/D1 (also in PCINT2) carry serial traffic,
-// so the ISR also fires during UART RX, but it only checks PD4 and PD7, so it
+// so the ISR also fires during UART RX, but it only checks PD7 and PD4, so it
 // is harmless — minor ISR overhead during serial bursts, negligible for a slow
 // tracked robot.
 ISR(PCINT2_vect) {
-  if (PIND & _BV(PD4)) {
+  if (PIND & _BV(PD7)) {
     left_count++;
   }
-  if (PIND & _BV(PD7)) {
+  if (PIND & _BV(PD4)) {
     right_count++;
   }
 }
