@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover
     serial = None
 
 
-DEFAULT_PORT = "/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"
+DEFAULT_PORT = "/dev/arduino"
 
 
 def parse_e_line(line: str) -> Optional[Tuple[int, int, int, int, int, int, int]]:

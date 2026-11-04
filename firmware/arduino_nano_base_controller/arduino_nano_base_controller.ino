@@ -61,8 +61,8 @@ const uint8_t RIGHT_PWM_B = 10; // HW-354 INB
 // control loop, as the hardware cannot provide it.
 const uint8_t LEFT_ENC_S1 = 3;    // Motor A S1 — LIVE channel, counted via PCINT2
 const uint8_t LEFT_ENC_S2 = 7;    // Motor A S2 — DEAD channel, debug only
-const uint8_t RIGHT_ENC_S1 = 4;   // Motor B S1 — LIVE channel, counted via PCINT2
-const uint8_t RIGHT_ENC_S2 = 2;   // Motor B S2 — DEAD channel, debug only
+const uint8_t RIGHT_ENC_S1 = 2;   // Motor B S1 — LIVE channel, counted via PCINT2
+const uint8_t RIGHT_ENC_S2 = 4;   // Motor B S2 — DEAD channel, debug only
 
 // ---------------- Configuration ----------------
 
@@ -78,7 +78,7 @@ const int MIN_EFFECTIVE_PWM = 40; // raised to help overcome stiction
 // Encoder direction is now inferred from commanded motor direction, so there are
 // no separate encoder-sign flags.
 const int LEFT_MOTOR_SIGN = 1;
-const int RIGHT_MOTOR_SIGN = 1;
+const int RIGHT_MOTOR_SIGN = -1;
 
 // Simple PI controller gains. These are placeholders.
 float KP = 0.8f;
