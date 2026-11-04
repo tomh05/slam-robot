@@ -11,11 +11,10 @@ This file tracks information that is still needed before implementation details 
    - HW-354/MX1508 motor supply must be treated as 9 V max for initial tests; do not connect a 12 V battery directly to the motor driver.
    - Need advice/decision on LiPo cell count, capacity, motor supply path, 5 V regulator/BEC for Pi/lidar, fusing, switch, and emergency stop.
 
-2. **Confirm lidar electrical details and exact baud.**
-   - Old notes strongly suggest MB_1R2T or compatible.
-   - Community code exists, but baud differs between examples: `158700` vs `153600`.
-   - Need raw serial capture and voltage-level measurement.
-   - See [`lidar-module-notes.md`](lidar-module-notes.md) and [`lidar-mb-1r2t-ros2-port.md`](lidar-mb-1r2t-ros2-port.md).
+2. **Confirm lidar electrical details and final deployment settings.**
+   - Protocol compatibility is now confirmed (YDLIDAR framing/checksum).
+   - Remaining questions are electrical margins, mounting, and final runtime configuration.
+   - See [`lidar-protocol-findings-2025-10-23.md`](lidar-protocol-findings-2025-10-23.md) and [`lidar-module-notes.md`](lidar-module-notes.md).
 
 3. **What current and thermal limits does the HW-354/MX1508 board have in practice?**
    - Pinout/chip are now identified: MX1508 with `INA`, `INB`, `INC`, `IND`.
@@ -43,13 +42,13 @@ Use Humble/22.04 only if a critical driver is not available on Jazzy.
 
 ### D2: Lidar driver
 
-Decision: treat this as an MB_1R2T ROS 2 port task first.
+Decision: keep the in-repo ROS 2 lidar stack (`lidar_scan_publisher`) as the primary path.
 
 Plan:
 
-- Capture raw data at `158700` and `153600` baud.
-- Port the community MB_1R2T parser to ROS 2 and publish `sensor_msgs/LaserScan`.
-- Optionally test `YDLIDAR/ydlidar_ros2_driver`, likely its `humble` branch for Jazzy/Humble-era ROS 2, but this is secondary.
+- Keep validating on-robot behaviour (orientation, ranges, scan stability) with the current decoder.
+- Keep protocol logic unit-testable and tied to captured sample data.
+- Optionally test `YDLIDAR/ydlidar_ros2_driver` as a secondary cross-check path.
 
 Do not use `lidar-resources/ydlidar_ros_driver-master` or `Vidicon/mb_1r2t_ros` directly because both are ROS 1/catkin.
 

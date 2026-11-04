@@ -270,14 +270,7 @@ Do not rediscover these; details are in the linked docs.
 - Arduino: Nano clone, CH340C, mini USB, likely 5 V logic.
 - Motor output/control pins are decided: Arduino D5/D6/D9/D10 for HW-354 `INA`/`INB`/`INC`/`IND` respectively.
 - Motor connector order: `M+`, `M-`, `GND`, `VCC`, `S1`, `S2`.
-- Lidar: likely MB_1R2T or compatible 5 V serial lidar. Preferred path is to port community MB_1R2T parser to ROS 2. Official YDLIDAR ROS 2 driver exists but is secondary for this module.
-  - **Update 2025-10-23:** the module speaks the **YDLIDAR protocol** (verified
-    with the vendor checksum, 1111/1111 packets valid).  Framing, distance
-    scale and angle maths are now proven and documented in
-    `docs/lidar-protocol-findings-2025-10-23.md`; the custom ROS 2 node has
-    been rewritten on top of a unit tested decoder
-    (`ros2_ws/src/lidar_scan_publisher/lidar_scan_publisher/ydlidar_protocol.py`).
-    The last on-robot check of the rewritten node is still outstanding.
+- Lidar: module uses YDLIDAR-compatible packet protocol (vendor checksum validated, 1111/1111 packets valid). Framing, distance scale, and angle maths are documented in `docs/lidar-protocol-findings-2025-10-23.md`; active ROS 2 integration is `ros2_ws/src/lidar_scan_publisher` with unit-testable decoder logic.
 - Spare adapter: MAX3232 RS232-TTL level converter. It is not a USB-to-TTL adapter by itself; do not connect RS232 side to lidar TTL or Pi GPIO.
 
 ## Most important docs

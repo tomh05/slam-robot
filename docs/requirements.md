@@ -20,7 +20,7 @@ Known now:
 - Onboard computer: Raspberry Pi 4 Model B, 2 GB RAM.
 - Drive base: tracked chassis with two motors; old chassis link: <https://www.aliexpress.com/item/32800078967.html>.
 - Feedback: motor hall-effect encoders/sensors.
-- Range sensor: likely MB_1R2T or compatible factory-test 5 V serial 360-degree lidar module. See [`lidar-module-notes.md`](lidar-module-notes.md) and [`lidar-mb-1r2t-ros2-port.md`](lidar-mb-1r2t-ros2-port.md).
+- Range sensor: factory-test 5 V serial module with YDLIDAR-compatible packet protocol (validated in [`lidar-protocol-findings-2025-10-23.md`](lidar-protocol-findings-2025-10-23.md)).
 - Low-level controller: an Arduino Nano was previously used to detect motor positions and drive motors.
 - Motor driver: HW-354 dual motor controller, MX1508 based, with `INA`/`INB` for Motor A and `INC`/`IND` for Motor B. Motor driver VCC should be treated as 2-10 V, so 12 V must not be connected directly.
 
@@ -28,7 +28,7 @@ To be confirmed later:
 
 - Raspberry Pi storage size and current SD card contents.
 - Raspberry Pi OS currently installed, if any.
-- Lidar exact model/protocol confirmation, serial voltage level, scan rate, and whether `158700` or `153600` baud is correct on this unit.
+- Lidar exact retail model, serial voltage level, and final scan-rate configuration.
 - Motor driver part number, voltage/current rating, and control interface.
 - Encoder type: quadrature? ticks per revolution? voltage level? whether connected to motor shaft or output shaft.
 - Battery voltage, regulator capacity, and power isolation.
@@ -72,9 +72,9 @@ Use [`hardware-inventory-template.md`](hardware-inventory-template.md) to record
 - The lidar driver shall publish `sensor_msgs/LaserScan`, normally on `/scan`.
 - The lidar shall be mounted rigidly and its transform to `base_link` shall be published as `base_link -> laser` or `base_link -> lidar_link`.
 - The lidar driver shall be ROS 2 compatible.
-- The preferred lidar path is to port the existing MB_1R2T community parser/ROS 1 driver to a ROS 2 node publishing `sensor_msgs/LaserScan`.
+- The primary lidar path is the in-repo ROS 2 `lidar_scan_publisher` node publishing `sensor_msgs/LaserScan`.
 - The existing `lidar-resources/ydlidar_ros_driver-master` package and `Vidicon/mb_1r2t_ros` are ROS 1/catkin and shall not be used directly as final packages.
-- The official `YDLIDAR/ydlidar_ros2_driver` exists and may be tested, but it is secondary for this module because MB_1R2T has known direct-streaming community code.
+- `YDLIDAR/ydlidar_ros2_driver` remains an optional comparison path, but current project integration uses the in-repo driver.
 - The project shall still include a lidar validation step before depending on it for SLAM.
 - If the lidar hardware is dead or data quality is poor, the project shall allow substituting a known ROS 2-supported 2D lidar without changing the rest of the stack.
 
