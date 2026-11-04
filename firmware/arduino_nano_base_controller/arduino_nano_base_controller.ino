@@ -44,10 +44,10 @@
 
 // MX1508 motor driver PWM outputs (from the Nano's perspective).
 // All selected pins support PWM on classic Nano.
-const uint8_t LEFT_PWM_A = 6;   // HW-354 INC
-const uint8_t LEFT_PWM_B = 5;   // HW-354 IND
-const uint8_t RIGHT_PWM_A = 9;  // HW-354 INA
-const uint8_t RIGHT_PWM_B = 10; // HW-354 INB
+const uint8_t LEFT_PWM_A = 5;   // HW-354 INA
+const uint8_t LEFT_PWM_B = 6;   // HW-354 INB
+const uint8_t RIGHT_PWM_A = 9;  // HW-354 INC
+const uint8_t RIGHT_PWM_B = 10; // HW-354 IND
 
 // Encoder/hall inputs, matching the existing board pinout.
 // Both encoders have a hardware fault: only S1 produces pulses, S2 is dead.
@@ -59,10 +59,10 @@ const uint8_t RIGHT_PWM_B = 10; // HW-354 INB
 // (magnitude) comes from the encoder step count. Direction (forward/backward)
 // is inferred from the commanded motor direction (target velocity sign) in the
 // control loop, as the hardware cannot provide it.
-const uint8_t LEFT_ENC_S1 = 7;    // Motor A S1 — LIVE channel, counted via PCINT2
-const uint8_t LEFT_ENC_S2 = 3;    // Motor A S2 — DEAD channel, debug only
-const uint8_t RIGHT_ENC_S1 = 4;   // Motor B S1 — LIVE channel, counted via PCINT2
-const uint8_t RIGHT_ENC_S2 = 2;   // Motor B S2 — DEAD channel, debug only
+const uint8_t LEFT_ENC_S1 = 4;    // Motor A S1 — LIVE channel, counted via PCINT2
+const uint8_t LEFT_ENC_S2 = 2;    // Motor A S2 — DEAD channel, debug only
+const uint8_t RIGHT_ENC_S1 = 7;   // Motor B S1 — LIVE channel, counted via PCINT2
+const uint8_t RIGHT_ENC_S2 = 3;   // Motor B S2 — DEAD channel, debug only
 
 // ---------------- Configuration ----------------
 
@@ -121,6 +121,7 @@ uint8_t last_left_s1_level = 0;
 uint8_t last_left_s2_level = 0;
 uint8_t last_right_s1_level = 0;
 uint8_t last_right_s2_level = 0;
+volatile uint8_t last_encoder_portd = 0;
 unsigned long left_s1_edges = 0;
 unsigned long left_s2_edges = 0;
 unsigned long right_s1_edges = 0;
@@ -131,20 +132,20 @@ uint8_t input_len = 0;
 
 // ---------------- Encoder interrupts ----------------
 
-// Both encoders: the live signal for each motor is on S1 (left = D7, right = D4).
+// Both encoders: the live signal for each motor is on S1 (left = D4, right = D7).
 // Both D4 and D7 are on port D, so they share the PCINT2 pin-change interrupt
-// group. The ISR fires on both edges; we only count rising edges to match the
-// original RISING-edge behaviour. D0/D1 (also in PCINT2) carry serial traffic,
-// so the ISR also fires during UART RX, but it only checks PD7 and PD4, so it
-// is harmless — minor ISR overhead during serial bursts, negligible for a slow
-// tracked robot.
+// group. Pin-change interrupts fire on both edges, so compare the current port
+// state with the previous one and count only low-to-high transitions.
 ISR(PCINT2_vect) {
-  if (PIND & _BV(PD7)) {
+  uint8_t current_portd = PIND;
+  uint8_t rising_edges = current_portd & ~last_encoder_portd;
+  if (rising_edges & _BV(PD4)) {
     left_count++;
   }
-  if (PIND & _BV(PD4)) {
+  if (rising_edges & _BV(PD7)) {
     right_count++;
   }
+  last_encoder_portd = current_portd;
 }
 
 // ---------------- Motor output ----------------
@@ -268,7 +269,9 @@ int updateOneMotor(
     return 0;
   }
 
-  float error = target_tps - measured_tps;
+  float target_magnitude = abs(target_tps);
+  float measured_magnitude = abs(measured_tps);
+  float error = target_magnitude - measured_magnitude;
   integral += error * dt_s;
   integral = constrain(integral, -1000.0f, 1000.0f);
   float derivative = (error - last_error) / dt_s;
@@ -276,15 +279,16 @@ int updateOneMotor(
 
   float output = KP * error + KI * integral + KD * derivative;
 
-  // This controller output is interpreted as a PWM delta around current command.
-  int new_pwm = current_pwm + (int)output;
-  new_pwm = constrain(new_pwm, -MAX_PWM, MAX_PWM);
+  // Feedback changes PWM magnitude only. Direction always follows the target,
+  // so an overspeed correction cannot accidentally reverse the motor.
+  int new_pwm_magnitude = abs(current_pwm) + (int)output;
+  new_pwm_magnitude = constrain(new_pwm_magnitude, 0, MAX_PWM);
 
-  if (new_pwm != 0 && abs(new_pwm) < MIN_EFFECTIVE_PWM) {
-    new_pwm = (new_pwm > 0) ? MIN_EFFECTIVE_PWM : -MIN_EFFECTIVE_PWM;
+  if (new_pwm_magnitude != 0 && new_pwm_magnitude < MIN_EFFECTIVE_PWM) {
+    new_pwm_magnitude = MIN_EFFECTIVE_PWM;
   }
 
-  return new_pwm;
+  return (target_tps > 0.0f) ? new_pwm_magnitude : -new_pwm_magnitude;
 }
 
 void controlLoop() {
@@ -461,6 +465,7 @@ void setup() {
   // NOTE: D0/D1 carry serial traffic, so PCINT2_vect also fires during UART RX,
   // but the ISR only checks PD4 and PD7, so it is harmless — minor ISR overhead
   // during serial bursts, negligible for a slow tracked robot.
+  last_encoder_portd = PIND;
   PCICR |= _BV(PCIE2);
   PCMSK2 |= _BV(PCINT20); // D4 = PD4 = PCINT20 (left encoder S1)
   PCMSK2 |= _BV(PCINT23); // D7 = PD7 = PCINT23 (right encoder S1)
