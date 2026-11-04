@@ -59,8 +59,8 @@ const uint8_t RIGHT_PWM_B = 10; // HW-354 INB
 // (magnitude) comes from the encoder step count. Direction (forward/backward)
 // is inferred from the commanded motor direction (target velocity sign) in the
 // control loop, as the hardware cannot provide it.
-const uint8_t LEFT_ENC_S1 = 7;    // Motor A S1 — LIVE channel, counted via PCINT2
-const uint8_t LEFT_ENC_S2 = 3;    // Motor A S2 — DEAD channel, debug only
+const uint8_t LEFT_ENC_S1 = 3;    // Motor A S1 — LIVE channel, counted via PCINT2
+const uint8_t LEFT_ENC_S2 = 7;    // Motor A S2 — DEAD channel, debug only
 const uint8_t RIGHT_ENC_S1 = 4;   // Motor B S1 — LIVE channel, counted via PCINT2
 const uint8_t RIGHT_ENC_S2 = 2;   // Motor B S2 — DEAD channel, debug only
 
@@ -78,7 +78,7 @@ const int MIN_EFFECTIVE_PWM = 40; // raised to help overcome stiction
 // Encoder direction is now inferred from commanded motor direction, so there are
 // no separate encoder-sign flags.
 const int LEFT_MOTOR_SIGN = 1;
-const int RIGHT_MOTOR_SIGN = -1;
+const int RIGHT_MOTOR_SIGN = 1;
 
 // Simple PI controller gains. These are placeholders.
 float KP = 0.8f;
@@ -195,7 +195,7 @@ void handleLine(char *line) {
     long r = 0;
     if (sscanf(line + 1, "%ld %ld", &l, &r) == 2) {
       left_target_tps = (float)l;
-      right_target_tps = (float)r;
+      right_target_tps = -(float)r;
       last_command_ms = millis();
       // Do not acknowledge every velocity command: the Pi sends these at
       // control-loop rate, and ACK spam can interleave with periodic status.
