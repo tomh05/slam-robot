@@ -11,7 +11,7 @@ arduino_base_node:
     track_width_m: 0.155
     wheel_radius_m: 0.029
 
-    # Provisional encoder characterisation from manual one-output-wheel-rev tests.
+    # Encoder characterisation from bench calibration (S1 edges/2, manual wheel revs).
     # Legacy shared values remain as fallback; side-specific values below take precedence.
     #
     # Direction is now inferred from the motor's commanded direction in the
@@ -30,8 +30,8 @@ arduino_base_node:
     #    direction fix — fix motor wiring/sign in the firmware first.
     ticks_per_rev: 360.0
     ticks_per_meter: 0.0
-    left_ticks_per_rev: 224.0
-    right_ticks_per_rev: 150.0
+    left_ticks_per_rev: 225.6
+    right_ticks_per_rev: 222.2
     left_ticks_per_meter: 0.0
     right_ticks_per_meter: 0.0
 
