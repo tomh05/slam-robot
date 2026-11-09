@@ -1,0 +1,1 @@
+ssh ubuntu@slamrobot.local
