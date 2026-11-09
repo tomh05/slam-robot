@@ -31,8 +31,8 @@ arduino_base_node:
     # Distance scale adjusted from straight-line tests (odom vs real).
     ticks_per_rev: 360.0
     ticks_per_meter: 0.0
-    left_ticks_per_rev: 286.2
-    right_ticks_per_rev: 281.8
+    left_ticks_per_rev: 250.1
+    right_ticks_per_rev: 246.3
     left_ticks_per_meter: 0.0
     right_ticks_per_meter: 0.0
 
