@@ -28,10 +28,11 @@ arduino_base_node:
     # 3. If a wheel's position moves the wrong way, set its *_encoder_sign to -1.0
     #    as a fine-calibration flip. Do NOT use *_encoder_sign as a primary
     #    direction fix — fix motor wiring/sign in the firmware first.
+    # Distance scale adjusted from straight-line test (odom 0.467m vs real 0.41m).
     ticks_per_rev: 360.0
     ticks_per_meter: 0.0
-    left_ticks_per_rev: 225.6
-    right_ticks_per_rev: 222.2
+    left_ticks_per_rev: 257.2
+    right_ticks_per_rev: 253.3
     left_ticks_per_meter: 0.0
     right_ticks_per_meter: 0.0
 
