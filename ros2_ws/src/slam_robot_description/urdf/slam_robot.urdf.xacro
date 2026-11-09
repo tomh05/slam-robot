@@ -19,7 +19,7 @@
   <xacro:arg name="lidar_x" default="0.0" />
   <xacro:arg name="lidar_y" default="0.0" />
   <xacro:arg name="lidar_z" default="0.0555" />
-  <xacro:arg name="lidar_yaw" default="${pi + 5*pi/180}" /> <!-- 185 degrees -->
+  <xacro:arg name="lidar_yaw" default="${pi - 5*pi/180}" /> <!-- 175 degrees -->
 
   <xacro:property name="track_separation" value="$(arg track_separation)" />
   <xacro:property name="track_contact_length" value="$(arg track_contact_length)" />
@@ -42,7 +42,7 @@
   <xacro:property name="track_box_height" value="${track_height * 0.4}" />
 
   <material name="chassis_dark">
-    <color rgba="0.10 0.10 0.10 1.0" />
+    <color rgba="0.30 0.30 0.30 1.0" />
   </material>
   <material name="track_black">
     <color rgba="0.01 0.01 0.01 1.0" />
