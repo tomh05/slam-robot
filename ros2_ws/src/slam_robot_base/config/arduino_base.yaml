@@ -1,6 +1,6 @@
 arduino_base_node:
   ros__parameters:
-    port: /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0
+    port: /dev/arduino
     baud: 115200
 
     odom_frame_id: odom
