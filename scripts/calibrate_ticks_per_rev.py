@@ -4,12 +4,17 @@
 Usage:
   1. Lift the robot (or otherwise allow tracks/wheels to spin freely).
   2. Run this script on the Pi connected to the Arduino over USB.
-  3. It zeros encoder counts, then prompts you to rotate each output wheel
-     by a known number of revolutions (by hand, slowly) in the forward direction.
+  3. It reads raw encoder edge counts, then prompts you to rotate each output
+     wheel by a known number of revolutions (by hand, slowly) in the forward
+     direction.
   4. It reports ticks/rev for each side.
 
-The Arduino firmware reports signed positions in the E line:
-  E <millis> <left_position> <right_position> <left_tps> <right_tps> <left_pwm> <right_pwm>
+Note: The Arduino firmware only accumulates signed E-line positions when motors
+are actively commanded (to avoid counting passive motion). For hand-spun bench
+tests we use the R (raw) diagnostic line's S1 edge counters instead:
+  R <ms> <LS1> <LS2> <RS1> <RS2> <LS1_edges> <LS2_edges> <RS1_edges> <RS2_edges>
+Edge counters count both transitions; ticks (x1, rising edges) are estimated as
+edges/2. Rotate in the forward direction for consistency.
 
 Motors are commanded to zero (V 0 0) while running for safety.
 """
@@ -29,12 +34,18 @@ except ImportError:  # pragma: no cover
 DEFAULT_PORT = "/dev/arduino"
 
 
-def parse_e_line(line: str) -> Optional[Tuple[int, int, int, int, int, int, int]]:
+def parse_r_line(line: str) -> Optional[Tuple[int, int, int, int, int]]:
+    """Parse R line: R ms LS1 LS2 RS1 RS2 LS1_edges LS2_edges RS1_edges RS2_edges"""
     parts = line.split()
-    if len(parts) != 8 or parts[0] != "E":
+    if len(parts) < 10 or parts[0] != "R":
         return None
     try:
-        return tuple(int(p) for p in parts[1:8])  # type: ignore[return-value]
+        ms = int(parts[1])
+        ls1_edges = int(parts[6])
+        ls2_edges = int(parts[7])
+        rs1_edges = int(parts[8])
+        rs2_edges = int(parts[9])
+        return ms, ls1_edges, ls2_edges, rs1_edges, rs2_edges
     except ValueError:
         return None
 
@@ -44,27 +55,24 @@ def write_line(ser: serial.Serial, line: str) -> None:
     ser.flush()
 
 
-def read_latest_status(ser: serial.Serial, timeout_s: float = 0.3) -> Optional[Tuple[int, int, int, int, int, int, int]]:
+def read_latest_edges(ser: serial.Serial, timeout_s: float = 1.0) -> Optional[Tuple[int, int, int, int, int]]:
+    """Return latest (ms, ls1_edges, ls2_edges, rs1_edges, rs2_edges) from R lines."""
     deadline = time.monotonic() + timeout_s
     latest = None
     while time.monotonic() < deadline:
-        raw = ser.readline()
-        if not raw:
-            continue
-        line = raw.decode("ascii", errors="replace").strip()
-        parsed = parse_e_line(line)
-        if parsed is not None:
-            latest = parsed
+        write_line(ser, "R")
+        time.sleep(0.05)
+        # Drain a few lines to catch the response
+        drain_until = time.monotonic() + 0.2
+        while time.monotonic() < drain_until:
+            raw = ser.readline()
+            if not raw:
+                continue
+            line = raw.decode("ascii", errors="replace").strip()
+            parsed = parse_r_line(line)
+            if parsed is not None:
+                latest = parsed
     return latest
-
-
-def wait_for_status(ser: serial.Serial, timeout_s: float = 5.0) -> Optional[Tuple[int, int, int, int, int, int, int]]:
-    deadline = time.monotonic() + timeout_s
-    while time.monotonic() < deadline:
-        status = read_latest_status(ser, timeout_s=0.5)
-        if status is not None:
-            return status
-    return None
 
 
 def main() -> int:
@@ -91,47 +99,50 @@ def main() -> int:
         ser.reset_input_buffer()
 
         # Safety: keep motors at zero.
-        write_line(ser, "V 0 0")
+        for _ in range(3):
+            write_line(ser, "V 0 0")
+            time.sleep(0.05)
 
-        status = wait_for_status(ser)
-        if status is None:
-            print("ERROR: no E status received from Arduino. Check port/firmware.", file=sys.stderr)
+        edges0 = read_latest_edges(ser, timeout_s=3.0)
+        if edges0 is None:
+            print("ERROR: no R (raw) response from Arduino. Check port/firmware (needs R command support).", file=sys.stderr)
             return 1
 
         print("\nMotors are commanded to zero. Rotate wheels BY HAND (slowly, forward).")
+        print("Using R-line S1 edge counts (edges/2 ≈ ticks) because E positions don't update while stopped.")
         print(f"Target: {args.revs:g} revolution(s) per side.\n")
 
-        def measure_side(side: str, index: int) -> Optional[int]:
-            # Zero counts
-            write_line(ser, "Z")
-            time.sleep(0.2)
-            ser.reset_input_buffer()
-            write_line(ser, "V 0 0")
-            status0 = wait_for_status(ser)
-            if status0 is None:
-                print(f"  ERROR: could not read status for {side} side.")
+        def measure_side(side: str, edge_index: int) -> Optional[float]:
+            # edge_index: 1 = ls1_edges, 3 = rs1_edges in (ms, ls1, ls2, rs1, rs2)
+            baseline = read_latest_edges(ser, timeout_s=2.0)
+            if baseline is None:
+                print(f"  ERROR: could not read raw edges for {side} side.")
                 return None
-            _, l0, r0, *_ = status0
-            start_pos = l0 if index == 0 else r0
+            start_edges = baseline[edge_index]
+            start_other = baseline[3 if edge_index == 1 else 1]
 
             input(f"  [{side}] Rotate the {side} output wheel FORWARD {args.revs:g} rev(s), then press Enter... ")
 
-            # Keep sending safe zero command while reading
             for _ in range(3):
                 write_line(ser, "V 0 0")
                 time.sleep(0.05)
-            status1 = wait_for_status(ser, timeout_s=2.0)
-            if status1 is None:
-                print(f"  ERROR: could not read status after rotating {side} side.")
+            after = read_latest_edges(ser, timeout_s=2.0)
+            if after is None:
+                print(f"  ERROR: could not read raw edges after rotating {side} side.")
                 return None
-            _, l1, r1, *_ = status1
-            end_pos = l1 if index == 0 else r1
-            delta = end_pos - start_pos
-            print(f"  [{side}] position: {start_pos} -> {end_pos}  (delta = {delta} ticks)")
-            return delta
+            end_edges = after[edge_index]
+            end_other = after[3 if edge_index == 1 else 1]
+            delta_edges = end_edges - start_edges
+            other_delta = end_other - start_other
+            ticks_est = delta_edges / 2.0
+            print(
+                f"  [{side}] S1 edges: {start_edges} -> {end_edges} (delta={delta_edges}, est. ticks={ticks_est:.1f})"
+                f"  [other side moved {other_delta} edges; keep it still]"
+            )
+            return ticks_est
 
-        left_ticks = measure_side("LEFT", 0)
-        right_ticks = measure_side("RIGHT", 1)
+        left_ticks = measure_side("LEFT", 1)
+        right_ticks = measure_side("RIGHT", 3)
 
         # Stop/cleanup
         try:
@@ -140,20 +151,21 @@ def main() -> int:
         except serial.SerialException:
             pass
 
-        print("\n--- Results ---")
+        print("\n--- Results (estimated from S1 edges/2) ---")
         circumference = 2.0 * 3.141592653589793 * args.wheel_radius_m
         if left_ticks is not None and args.revs != 0:
             tpr = left_ticks / args.revs
             tpm = tpr / circumference if circumference > 0 else 0.0
-            print(f"LEFT:  ticks/rev = {tpr:.1f}   ticks/m = {tpm:.1f}  (wheel_radius_m={args.wheel_radius_m})")
+            print(f"LEFT:  ticks/rev ≈ {tpr:.1f}   ticks/m ≈ {tpm:.1f}  (wheel_radius_m={args.wheel_radius_m})")
         if right_ticks is not None and args.revs != 0:
             tpr = right_ticks / args.revs
             tpm = tpr / circumference if circumference > 0 else 0.0
-            print(f"RIGHT: ticks/rev = {tpr:.1f}   ticks/m = {tpm:.1f}  (wheel_radius_m={args.wheel_radius_m})")
+            print(f"RIGHT: ticks/rev ≈ {tpr:.1f}   ticks/m ≈ {tpm:.1f}  (wheel_radius_m={args.wheel_radius_m})")
 
-        print("\nUpdate ros2_ws/src/slam_robot_base/config/arduino_base.yaml with these values,")
-        print("then restart arduino_base_node and re-test straight-line motion.")
-        print("Note: rotate in the robot's FORWARD direction. If a delta is negative, check motor/encoder sign.")
+        print("\nUpdate ros2_ws/src/slam_robot_base/config/arduino_base.yaml with these values")
+        print("(use left/right_ticks_per_rev or left/right_ticks_per_meter), then restart")
+        print("arduino_base_node and re-test straight-line motion.")
+        print("Tip: rotate in the robot's FORWARD direction; do 5-10 revs for better accuracy.")
 
     return 0
 
