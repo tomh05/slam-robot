@@ -34,6 +34,8 @@ sudo i2cdetect -y 1
 - Expected result: device appears at `0x68` or `0x69`.
 - If nothing appears: recheck power, SDA/SCL, common ground, and ADDR pin state. Try bus `0` only on very old Pi revisions (Pi 4 uses bus 1).
 
+**Detected:** `0x69` on `/dev/i2c-1` (2026 user session). Pi also has `/dev/i2c-20`, `/dev/i2c-21` (not used for this header device). User `ubuntu` was not in `i2c` group initially; add with `sudo usermod -aG i2c ubuntu` and re-login for non-root access.
+
 ## Integration Plan (for future reference)
 - **Attachment point:** Raspberry Pi (I2C). Not on Arduino (to avoid extending the motor control serial protocol).
 - **ROS 2 usage:** Publish as `sensor_msgs/Imu` on e.g. `/imu/data` with proper `imu_link` frame.
@@ -41,9 +43,9 @@ sudo i2cdetect -y 1
 - **Mounting:** Rigidly mount to chassis, aligned with robot base frame, away from excessive motor vibration if possible.
 
 ## Session Notes / TODO
-- [ ] Record actual detected I2C address from `i2cdetect` (fill in: `____`)
+- [x] Record actual detected I2C address from `i2cdetect`: `0x69`
 - [ ] Record exact breakout board name/silkscreen if different from assumed (fill in: `____`)
 - [ ] Confirm ADDR pin state (GND/VCC/unconnected) (fill in: `____`)
-- [ ] Add TF transform `base_link` -> `imu_link` once frame alignment is known
-- [ ] Select and install ROS 2 BMI160 driver on the Pi
+- [x] Add TF transform `base_link` -> `imu_link` (provisional) in `ros2_ws/src/slam_robot_description/urdf/slam_robot.urdf.xacro`; measure/align `imu_*` args to physical mount
+- [ ] Select and install ROS 2 BMI160 driver on the Pi (no `ros-jazzy-*bmi160*` apt package found; in-repo `bm160_imu_node` added as Option C)
 - [ ] Calibrate IMU (gyro bias) and test with `robot_localization` fusion

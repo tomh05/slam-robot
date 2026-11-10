@@ -21,6 +21,17 @@
   <xacro:arg name="lidar_z" default="0.0555" />
   <xacro:arg name="lidar_yaw" default="${pi - 7*pi/180}" /> <!-- 173 degrees -->
 
+  <!-- Provisional BM160 IMU pose. Measure and align to the physical module:
+       REP-103 in imu_link means +X forward, +Y left, +Z up relative to the
+       chip's reported axes/orientation as mounted. Adjust rpy if the board is
+       rotated or flipped. -->
+  <xacro:arg name="imu_x" default="0.0" />
+  <xacro:arg name="imu_y" default="0.0" />
+  <xacro:arg name="imu_z" default="0.02" />
+  <xacro:arg name="imu_roll" default="0.0" />
+  <xacro:arg name="imu_pitch" default="0.0" />
+  <xacro:arg name="imu_yaw" default="0.0" />
+
   <xacro:property name="track_separation" value="$(arg track_separation)" />
   <xacro:property name="track_contact_length" value="$(arg track_contact_length)" />
   <xacro:property name="track_overall_length" value="$(arg track_overall_length)" />
@@ -34,6 +45,12 @@
   <xacro:property name="lidar_y" value="$(arg lidar_y)" />
   <xacro:property name="lidar_z" value="$(arg lidar_z)" />
   <xacro:property name="lidar_yaw" value="$(arg lidar_yaw)" />
+  <xacro:property name="imu_x" value="$(arg imu_x)" />
+  <xacro:property name="imu_y" value="$(arg imu_y)" />
+  <xacro:property name="imu_z" value="$(arg imu_z)" />
+  <xacro:property name="imu_roll" value="$(arg imu_roll)" />
+  <xacro:property name="imu_pitch" value="$(arg imu_pitch)" />
+  <xacro:property name="imu_yaw" value="$(arg imu_yaw)" />
 
   <xacro:property name="wheel_radius" value="${track_height/2.0}" />
   <xacro:property name="wheel_length" value="${track_width}" />
@@ -178,5 +195,13 @@
     <parent link="base_link" />
     <child link="lidar_link" />
     <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 0 ${lidar_yaw}" />
+  </joint>
+
+  <link name="imu_link" />
+
+  <joint name="base_link_to_imu_link" type="fixed">
+    <parent link="base_link" />
+    <child link="imu_link" />
+    <origin xyz="${imu_x} ${imu_y} ${imu_z}" rpy="${imu_roll} ${imu_pitch} ${imu_yaw}" />
   </joint>
 </robot>
