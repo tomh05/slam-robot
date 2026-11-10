@@ -4,7 +4,7 @@ project(slam_robot_bringup)
 find_package(ament_cmake REQUIRED)
 
 install(
-  DIRECTORY launch rviz
+  DIRECTORY config launch rviz
   DESTINATION share/${PROJECT_NAME}
 )
 
