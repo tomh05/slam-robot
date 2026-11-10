@@ -21,16 +21,23 @@
   <xacro:arg name="lidar_z" default="0.0555" />
   <xacro:arg name="lidar_yaw" default="${pi - 7*pi/180}" /> <!-- 173 degrees -->
 
-  <!-- Provisional BM160 IMU pose. Measure and align to the physical module:
-       REP-103 in imu_link means +X forward, +Y left, +Z up relative to the
-       chip's reported axes/orientation as mounted. Adjust rpy if the board is
-       rotated or flipped. -->
+  <!-- BM160 IMU pose/orientation. Measured and aligned to the physical module.
+       REP-103 target: +X forward, +Y left, +Z up. The bm160_imu_node publishes
+       raw sensor axes in imu_link, so base_link->imu_link must reflect the
+       physical sensor frame orientation.
+
+       Observed (static, level): z=+9.81. Tilting forward gave y=+9.81,
+       backward y=-9.81; tilting right side gave x=+9.81, left x=-9.81.
+       => sensor frame is (right, forward, up) relative to base_link, i.e.
+       yaw = -pi/2 from base_link to imu_link. Verify after bringup:
+       rotating robot left/CCW (viewed from above) should give angular_velocity.z > 0.
+       Adjust imu_x/y/z to the measured mounting position. -->
   <xacro:arg name="imu_x" default="0.0" />
   <xacro:arg name="imu_y" default="0.0" />
   <xacro:arg name="imu_z" default="0.02" />
   <xacro:arg name="imu_roll" default="0.0" />
   <xacro:arg name="imu_pitch" default="0.0" />
-  <xacro:arg name="imu_yaw" default="0.0" />
+  <xacro:arg name="imu_yaw" default="-1.5707963" />
 
   <xacro:property name="track_separation" value="$(arg track_separation)" />
   <xacro:property name="track_contact_length" value="$(arg track_contact_length)" />
