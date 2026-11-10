@@ -47,5 +47,10 @@ sudo i2cdetect -y 1
 - [ ] Record exact breakout board name/silkscreen if different from assumed (fill in: `____`)
 - [ ] Confirm ADDR pin state (GND/VCC/unconnected) (fill in: `____`)
 - [x] Add TF transform `base_link` -> `imu_link` (provisional) in `ros2_ws/src/slam_robot_description/urdf/slam_robot.urdf.xacro`; measure/align `imu_*` args to physical mount
-- [ ] Select and install ROS 2 BMI160 driver on the Pi (no `ros-jazzy-*bmi160*` apt package found; in-repo `bm160_imu_node` added as Option C)
-- [ ] Calibrate IMU (gyro bias) and test with `robot_localization` fusion
+- [x] Add in-repo BMI160/BM160 IMU publisher: `ros2_ws/src/slam_robot_base/slam_robot_base/bm160_imu_node.py` (console script `bm160_imu_node`, publishes `/imu/data`, default `i2c_address=0x69`). No `ros-jazzy-*bmi160*` apt package found.
+- [x] Add `robot_localization` EKF config: `ros2_ws/src/slam_robot_bringup/config/ekf.yaml` (fuses `/odom` + `/imu/data` -> `/odometry/filtered`).
+- [x] Resolve TF ownership for EKF path: `arduino_base.launch.py` accepts `publish_tf` (default `true` for non-EKF compatibility); `slam_robot_bringup/launch/robot_core_ekf.launch.py` passes `publish_tf:=false` so only EKF publishes `odom -> base_link`.
+- [x] Wire into bringup: `ros2_ws/src/slam_robot_bringup/launch/robot_core_ekf.launch.py` (description + base + `bm160_imu_node` + `ekf_filter_node`).
+- [ ] On Pi: `sudo usermod -aG i2c ubuntu` (if needed), `sudo apt install -y ros-jazzy-robot-localization`, rebuild affected packages, verify `/imu/data` and `/odometry/filtered`.
+- [ ] Measure/set physical `imu_*` x/y/z/roll/pitch/yaw in `slam_robot_description/urdf/slam_robot.urdf.xacro`.
+- [ ] Calibrate IMU (gyro bias: `gyro_bias_x/y/z` params) and tune covariances/EKF after bringup.
