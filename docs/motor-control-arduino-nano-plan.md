@@ -157,10 +157,16 @@ Stop immediately:
 S\n
 ```
 
-Request status:
+Request encoder/motion status:
 
 ```text
 ?\n
+```
+
+Request battery/supply status (polled):
+
+```text
+B\n
 ```
 
 Set PID gains, optional later:
@@ -182,6 +188,16 @@ Example:
 ```text
 E 123456 12033 11988 105 103 87 85
 ```
+
+Battery/supply report (response to `B`):
+
+```text
+B <millis> <source> <adc_raw> <v_supply_mV>\n
+```
+
+- `source`: `0=unknown`, `1=battery`, `2=dc_external`
+- `adc_raw`: averaged 10-bit ADC reading from `A0`
+- `v_supply_mV`: scaled supply voltage in millivolts (2:1 divider, assumed 5 V ADC reference)
 
 Fault report:
 

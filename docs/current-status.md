@@ -1,6 +1,38 @@
 # Current Status / Next Session Entry Point
 
-Last updated: 2026-07-30.
+Last updated: 2026-07-30 (BM160 IMU + `robot_localization` EKF repo integration; user reported “looks good now”).
+
+## Recent update: BM160 IMU + EKF (repo integration)
+
+**Hardware:** BM160/BMI160-family 6-axis IMU on Raspberry Pi I2C bus 1, **detected at `0x69`** (`/dev/i2c-1`). `ubuntu` may need `sudo usermod -aG i2c ubuntu` + re-login.
+
+**Axis/orientation check (observed):** static `z=+9.81`; forward tilt `y=+9.81`, backward `y=-9.81`; right side `x=+9.81`, left `x=-9.81` => sensor frame `(right, forward, up)`. `ros2_ws/src/slam_robot_description/urdf/slam_robot.urdf.xacro` sets `imu_yaw = -1.5707963`; `imu_x/y/z` still provisional — measure physical mount and validate left/CCW turn gives `angular_velocity.z > 0`.
+
+**Repo changes (sync to Pi, then build):**
+- `ros2_ws/src/slam_robot_base/slam_robot_base/bm160_imu_node.py` — in-repo BMI160 I2C publisher (`python3-smbus`), publishes `sensor_msgs/Imu` on `/imu/data`, `frame_id=imu_link`, default `i2c_address=0x69`. No `ros-jazzy-*bmi160*` apt package was found (Option C).
+- `ros2_ws/src/slam_robot_base/setup.py`, `package.xml` — `bm160_imu_node` entry point, `sensor_msgs`, `python3-smbus`.
+- `ros2_ws/src/slam_robot_base/launch/arduino_base.launch.py` — adds `publish_tf` arg (default `true`, backward compatible).
+- `ros2_ws/src/slam_robot_description/urdf/slam_robot.urdf.xacro` — adds `imu_link` + `base_link->imu_link`.
+- `ros2_ws/src/slam_robot_bringup/config/ekf.yaml` — `robot_localization` `ekf_filter_node`: fuses `/odom` wheel `vx`,`vyaw` + `/imu/data` gyro `vyaw` => `/odometry/filtered`; `two_d_mode: true`; EKF publishes `odom->base_link`.
+- `ros2_ws/src/slam_robot_bringup/launch/robot_core_ekf.launch.py` — description + `arduino_base` (`publish_tf=false`, motors default disabled) + `bm160_imu_node` + `ekf_node`.
+- `ros2_ws/src/slam_robot_bringup/CMakeLists.txt`, `package.xml` — install `config/`, `exec_depend` on `robot_localization`.
+
+**TF ownership (important):** do not run two `odom -> base_link` publishers. EKF path uses `robot_core_ekf.launch.py` / `arduino_base.launch.py publish_tf:=false` + EKF `publish_tf: true`. Non-EKF `robot_core.launch.py` keeps `arduino_base` default `publish_tf: true`.
+
+**Pi commands:**
+```bash
+sudo apt install -y ros-jazzy-robot-localization python3-smbus i2c-tools
+cd ~/slam-robot/ros2_ws
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install --packages-select slam_robot_description slam_robot_base slam_robot_bringup
+source install/setup.bash
+ros2 launch slam_robot_bringup robot_core_ekf.launch.py
+```
+Verify: `ros2 topic hz /imu/data /odom /odometry/filtered`, `ros2 topic echo /odometry/filtered --once`, `ros2 run tf2_ros tf2_echo odom base_link` (single publisher).
+
+**Gotcha:** if a new launch/config isn’t found after build, the robot may not have the latest source — sync from laptop (`./scripts/sync_to_robot.sh` or equivalent), then rebuild the affected package(s).
+
+**Next IMU/EKF steps:** calibrate `bm160_imu_node` `gyro_bias_*`; tune covariances (IMU + `arduino_base_node` odom placeholders in `arduino_base_node.py:301-306`); set measured `imu_x/y/z`; validate filtered yaw vs wheel odom during slip/turns; only then consider experimental accel fusion. For SLAM, use filtered odometry + `/scan` + TF with `slam_toolbox`/Nav2 (IMU/accel alone is not reliable position). Details: [`imu-bm160-session-notes.md`](imu-bm160-session-notes.md).
 
 ## Immediate state
 

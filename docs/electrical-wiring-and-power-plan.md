@@ -188,6 +188,17 @@ The left encoder `S1` (D4) is counted via a pin-change interrupt (PCINT2),
 and the right encoder `S1` (D7) is also counted via PCINT2. The `S2` channels
 (D2/D3) are dead and used for debugging only.
 
+### Battery/supply voltage sense
+
+| Function | Arduino Nano pin | Notes |
+|---|---:|---|
+| Supply voltage sense | A0 | Midpoint of 2:1 divider (12k/12k) from sensed supply rail to GND |
+
+- The same divider measures the supply in both power modes: ~9 V when on DC adapter, ~7.4–8.4 V when on 2S Li-ion battery.
+- With a 2:1 divider, A0 sees ~4.5 V max on 9 V DC and ~3.7–4.2 V on battery (within the Nano 5 V ADC range).
+- Arduino GND and the sensed supply GND must be common.
+- This provides supply/source voltage for reporting/classification, not state-of-charge coulomb counting.
+
 ### Serial
 
 | Function | Connection |
