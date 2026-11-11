@@ -52,3 +52,16 @@ arduino_base_node:
     # Safety default: do not move motors until explicitly enabled.
     motors_enabled: false
     send_zero_when_disabled: true
+
+    # Battery/supply sensing via Arduino A0 (2:1 divider, 12k/12k).
+    # Polled with the 'B' serial command and published as sensor_msgs/BatteryState.
+    battery_poll_period_s: 5.0
+    battery_frame_id: base_link
+    battery_location: base
+    battery_voltage_scale: 1.0
+    battery_source_dc_min_v: 8.7
+    battery_voltage_min_v: 6.0
+    battery_voltage_max_v: 9.5
+    # Approximate 2S Li-ion percentage bounds (set empty_voltage >= full_voltage to disable).
+    battery_full_voltage: 8.4
+    battery_empty_voltage: 6.6

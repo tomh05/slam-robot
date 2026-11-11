@@ -5,19 +5,23 @@
     - Arduino Nano clone, likely ATmega328P + CH340C, 5 V logic.
     - HW-354 / MX1508 dual motor controller.
     - Two DC gear motors with hall/encoder signals S1/S2.
+    - Battery/supply voltage divider on A0 (2:1, two 12k resistors to GND).
     - Raspberry Pi talks to this firmware over USB serial.
 
-  Serial protocol, first version:
+  Serial protocol:
     Pi -> Arduino:
       V <left_ticks_per_sec> <right_ticks_per_sec>\n
       S\n
       ?\n
       Z\n      # zero encoder counts, useful during bench testing
       R\n      # report raw encoder pin levels and transition counts, useful during pinout testing
+      B\n      # report battery/supply voltage status (polled)
 
     Arduino -> Pi, periodic:
       E <millis> <left_position> <right_position> <left_tps> <right_tps> <left_pwm> <right_pwm>\n
       R <millis> <left_s1> <left_s2> <right_s1> <right_s2> <left_s1_edges> <left_s2_edges> <right_s1_edges> <right_s2_edges>\n
+      B <millis> <source> <adc_raw> <v_supply_mV>\n
+        source: 0=unknown, 1=battery, 2=dc_external
 
   Safety:
     - Motors are stopped on boot.
@@ -34,6 +38,8 @@
       reported in the E line so the Pi receives correct direction information.
     - This means distance is accurate but the robot cannot detect slip or unexpected
       direction changes from the encoders alone.
+    - Battery sensing assumes a 2:1 divider on A0 and 5 V ADC reference.
+      A0 must not exceed 5 V (max sensed supply ~10 V with this divider).
     - PID gains are deliberately conservative placeholders.
 */
 
@@ -62,6 +68,12 @@ const uint8_t LEFT_ENC_S2 = 7;    // Motor A S2 — DEAD channel, debug only
 const uint8_t RIGHT_ENC_S1 = 2;   // Motor B S1 — LIVE channel, counted via PCINT2
 const uint8_t RIGHT_ENC_S2 = 4;   // Motor B S2 — DEAD channel, debug only
 
+// Battery/supply voltage sense input.
+// A0 is connected to the midpoint of a 2:1 divider (12k/12k) from the sensed
+// supply rail to GND. The same divider sees ~9 V DC adapter or ~7.4-8.4 V
+// 2S Li-ion battery, so A0 stays within ~3.7-4.5 V.
+const uint8_t BATTERY_ADC_PIN = A0;
+
 // ---------------- Configuration ----------------
 
 const unsigned long SERIAL_BAUD = 115200;
@@ -84,6 +96,22 @@ const int RIGHT_MOTOR_SIGN = -1;
 float KP = 0.8f;
 float KI = 0.05f;
 float KD = 0.0f;
+
+// Battery/supply sensing configuration.
+// Assumes DEFAULT 5 V ADC reference on Nano (10-bit ADC) and 2:1 divider.
+const uint16_t BATTERY_ADC_SAMPLES = 8;
+const unsigned long BATTERY_ADC_REFERENCE_MV = 5000;
+const unsigned long BATTERY_DIVIDER_NUMERATOR = 2;
+const unsigned long BATTERY_DIVIDER_DENOMINATOR = 1;
+const unsigned long BATTERY_DC_EXTERNAL_MIN_MV = 8700;
+const unsigned long BATTERY_PRESENT_MIN_MV = 6000;
+const unsigned long BATTERY_PRESENT_MAX_MV = 8600;
+
+enum BatterySource : uint8_t {
+  BATTERY_SOURCE_UNKNOWN = 0,
+  BATTERY_SOURCE_BATTERY = 1,
+  BATTERY_SOURCE_DC_EXTERNAL = 2,
+};
 
 // ---------------- State ----------------
 
@@ -187,6 +215,50 @@ void stopMotors() {
   applyMotorOutputs();
 }
 
+// ---------------- Battery sensing ----------------
+
+uint16_t readBatteryAdcRaw() {
+  // Discard first sample after mux/channel activity, then average.
+  analogRead(BATTERY_ADC_PIN);
+  delayMicroseconds(100);
+
+  unsigned long total = 0;
+  for (uint16_t i = 0; i < BATTERY_ADC_SAMPLES; i++) {
+    total += (unsigned long)analogRead(BATTERY_ADC_PIN);
+  }
+  return (uint16_t)(total / BATTERY_ADC_SAMPLES);
+}
+
+unsigned long adcToMillivolts(uint16_t adc_raw) {
+  return ((unsigned long)adc_raw * BATTERY_ADC_REFERENCE_MV) / 1023UL;
+}
+
+uint8_t classifyBatterySource(unsigned long supply_mv) {
+  if (supply_mv >= BATTERY_DC_EXTERNAL_MIN_MV) {
+    return BATTERY_SOURCE_DC_EXTERNAL;
+  }
+  if (supply_mv >= BATTERY_PRESENT_MIN_MV && supply_mv <= BATTERY_PRESENT_MAX_MV) {
+    return BATTERY_SOURCE_BATTERY;
+  }
+  return BATTERY_SOURCE_UNKNOWN;
+}
+
+void reportBatteryStatus() {
+  uint16_t adc_raw = readBatteryAdcRaw();
+  unsigned long v_div_mv = adcToMillivolts(adc_raw);
+  unsigned long v_supply_mv = (v_div_mv * BATTERY_DIVIDER_NUMERATOR) / BATTERY_DIVIDER_DENOMINATOR;
+  uint8_t source = classifyBatterySource(v_supply_mv);
+
+  Serial.print(F("B "));
+  Serial.print(millis());
+  Serial.print(' ');
+  Serial.print(source);
+  Serial.print(' ');
+  Serial.print(adc_raw);
+  Serial.print(' ');
+  Serial.println(v_supply_mv);
+}
+
 // ---------------- Serial protocol ----------------
 
 void handleLine(char *line) {
@@ -218,6 +290,8 @@ void handleLine(char *line) {
     Serial.println(F("OK zero"));
   } else if (line[0] == 'R') {
     reportRawEncoderPins();
+  } else if (line[0] == 'B') {
+    reportBatteryStatus();
   } else if (line[0] == 'P') {
     float kp = KP;
     float ki = KI;

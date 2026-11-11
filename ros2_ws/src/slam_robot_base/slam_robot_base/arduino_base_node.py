@@ -8,6 +8,7 @@ import rclpy
 from geometry_msgs.msg import TransformStamped, Twist
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
+from sensor_msgs.msg import BatteryState
 from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
 
@@ -29,6 +30,15 @@ class ArduinoStatus:
     raw: str
 
 
+@dataclass
+class ArduinoBatteryStatus:
+    arduino_millis: int
+    source: int
+    adc_raw: int
+    supply_mv: int
+    raw: str
+
+
 class ArduinoBaseNode(Node):
     """Bridge /cmd_vel to the Arduino Nano line protocol and publish odometry.
 
@@ -38,6 +48,14 @@ class ArduinoBaseNode(Node):
     and emits periodic status:
 
         E <millis> <left_position> <right_position> <left_tps> <right_tps> <left_pwm> <right_pwm>\n
+
+    Battery/supply status is polled on demand:
+
+        B\n
+    and reported as:
+
+        B <millis> <source> <adc_raw> <v_supply_mV>\n
+        source: 0=unknown, 1=battery, 2=dc_external
 
     The firmware reports signed positions (positive for forward, negative for
     backward) with direction inferred from the target velocity sign. The ROS
@@ -82,6 +100,17 @@ class ArduinoBaseNode(Node):
         self.declare_parameter('motors_enabled', False)
         self.declare_parameter('send_zero_when_disabled', True)
 
+        # Battery/supply sensing (polled from Arduino via 'B' command).
+        self.declare_parameter('battery_poll_period_s', 5.0)
+        self.declare_parameter('battery_frame_id', 'base_link')
+        self.declare_parameter('battery_location', 'base')
+        self.declare_parameter('battery_voltage_scale', 1.0)
+        self.declare_parameter('battery_source_dc_min_v', 8.7)
+        self.declare_parameter('battery_voltage_min_v', 6.0)
+        self.declare_parameter('battery_voltage_max_v', 9.5)
+        self.declare_parameter('battery_full_voltage', 8.4)
+        self.declare_parameter('battery_empty_voltage', 6.6)
+
         self.port = self.get_parameter('port').value
         self.baud = int(self.get_parameter('baud').value)
         self.base_frame_id = self.get_parameter('base_frame_id').value
@@ -120,6 +149,16 @@ class ArduinoBaseNode(Node):
         self.motors_enabled = bool(self.get_parameter('motors_enabled').value)
         self.send_zero_when_disabled = bool(self.get_parameter('send_zero_when_disabled').value)
 
+        self.battery_poll_period_s = float(self.get_parameter('battery_poll_period_s').value)
+        self.battery_frame_id = self.get_parameter('battery_frame_id').value
+        self.battery_location = self.get_parameter('battery_location').value
+        self.battery_voltage_scale = float(self.get_parameter('battery_voltage_scale').value)
+        self.battery_source_dc_min_v = float(self.get_parameter('battery_source_dc_min_v').value)
+        self.battery_voltage_min_v = float(self.get_parameter('battery_voltage_min_v').value)
+        self.battery_voltage_max_v = float(self.get_parameter('battery_voltage_max_v').value)
+        self.battery_full_voltage = float(self.get_parameter('battery_full_voltage').value)
+        self.battery_empty_voltage = float(self.get_parameter('battery_empty_voltage').value)
+
         if self.left_ticks_per_meter <= 0.0 or self.right_ticks_per_meter <= 0.0:
             raise ValueError('left_ticks_per_meter and right_ticks_per_meter must be positive')
         if command_rate_hz <= 0.0:
@@ -129,6 +168,7 @@ class ArduinoBaseNode(Node):
 
         self.status_pub = self.create_publisher(String, '~/status_raw', 10)
         self.odom_pub = self.create_publisher(Odometry, '/odom', 10)
+        self.battery_pub = self.create_publisher(BatteryState, '~/battery_state', 10)
         self.cmd_sub = self.create_subscription(Twist, '/cmd_vel', self.cmd_vel_callback, 10)
         self.tf_broadcaster = TransformBroadcaster(self) if self.publish_tf else None
 
@@ -147,9 +187,12 @@ class ArduinoBaseNode(Node):
         self.last_right_count: Optional[int] = None
         self.last_odom_time = self.get_clock().now()
         self.last_status: Optional[ArduinoStatus] = None
+        self.last_battery_source: Optional[int] = None
 
         self.create_timer(1.0 / serial_read_rate_hz, self.read_serial_once)
         self.create_timer(1.0 / command_rate_hz, self.command_timer)
+        if self.battery_poll_period_s > 0.0:
+            self.create_timer(self.battery_poll_period_s, self.request_battery_status)
 
         self.get_logger().info(
             'Arduino base node started: '
@@ -216,6 +259,9 @@ class ArduinoBaseNode(Node):
     def send_stop_command(self) -> None:
         self.write_line('S')
 
+    def request_battery_status(self) -> None:
+        self.write_line('B')
+
     def write_line(self, line: str) -> None:
         data = (line + '\n').encode('ascii')
         try:
@@ -252,15 +298,20 @@ class ArduinoBaseNode(Node):
         if line.startswith('ERR') or line.startswith('F'):
             self.get_logger().warn(f'Arduino reported: {line}')
             return
-        if not line.startswith('E '):
-            self.get_logger().debug(f'Ignoring serial line: {line}')
+        if line.startswith('E '):
+            status = self.parse_status(line)
+            if status is None:
+                return
+            self.update_odometry(status)
+            self.last_status = status
             return
-
-        status = self.parse_status(line)
-        if status is None:
+        if line.startswith('B '):
+            battery = self.parse_battery_status(line)
+            if battery is None:
+                return
+            self.publish_battery_state(battery)
             return
-        self.update_odometry(status)
-        self.last_status = status
+        self.get_logger().debug(f'Ignoring serial line: {line}')
 
     def parse_status(self, line: str) -> Optional[ArduinoStatus]:
         parts = line.split()
@@ -281,6 +332,72 @@ class ArduinoBaseNode(Node):
         except ValueError:
             self.get_logger().warn(f'Bad E line values: {line}')
             return None
+
+    def parse_battery_status(self, line: str) -> Optional[ArduinoBatteryStatus]:
+        parts = line.split()
+        if len(parts) != 5:
+            self.get_logger().warn(f'Bad B line field count: {line}')
+            return None
+        try:
+            return ArduinoBatteryStatus(
+                arduino_millis=int(parts[1]),
+                source=int(parts[2]),
+                adc_raw=int(parts[3]),
+                supply_mv=int(parts[4]),
+                raw=line,
+            )
+        except ValueError:
+            self.get_logger().warn(f'Bad B line values: {line}')
+            return None
+
+    def publish_battery_state(self, status: ArduinoBatteryStatus) -> None:
+        voltage = (status.supply_mv / 1000.0) * self.battery_voltage_scale
+        msg = BatteryState()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.battery_frame_id
+        msg.voltage = float(voltage)
+        msg.current = float('nan')
+        msg.charge = float('nan')
+        msg.capacity = float('nan')
+        msg.design_capacity = float('nan')
+        msg.percentage = float('nan')
+        msg.power_supply_health = BatteryState.POWER_SUPPLY_HEALTH_UNKNOWN
+        msg.power_supply_technology = BatteryState.POWER_SUPPLY_TECHNOLOGY_UNKNOWN
+        msg.present = False
+        msg.location = self.battery_location
+        msg.serial_number = ''
+
+        is_dc = voltage >= self.battery_source_dc_min_v or status.source == 2
+        is_battery = (
+            self.battery_voltage_min_v <= voltage <= self.battery_source_dc_min_v
+            or status.source == 1
+        )
+        if is_dc:
+            msg.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_NOT_CHARGING
+            msg.power_supply_technology = BatteryState.POWER_SUPPLY_TECHNOLOGY_UNKNOWN
+            msg.present = True
+        elif is_battery and self.battery_voltage_min_v <= voltage <= self.battery_voltage_max_v:
+            msg.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_DISCHARGING
+            msg.power_supply_technology = BatteryState.POWER_SUPPLY_TECHNOLOGY_LION
+            msg.present = True
+            if self.battery_full_voltage > self.battery_empty_voltage:
+                pct = (voltage - self.battery_empty_voltage) / (
+                    self.battery_full_voltage - self.battery_empty_voltage
+                )
+                msg.percentage = float(max(0.0, min(1.0, pct)))
+        else:
+            msg.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_UNKNOWN
+            msg.present = False
+
+        if self.last_battery_source != status.source:
+            source_names = {0: 'unknown', 1: 'battery', 2: 'dc_external'}
+            self.get_logger().info(
+                f"Battery source: {source_names.get(status.source, 'invalid')} "
+                f'voltage={voltage:.2f}V adc_raw={status.adc_raw}'
+            )
+            self.last_battery_source = status.source
+
+        self.battery_pub.publish(msg)
 
     def update_odometry(self, status: ArduinoStatus) -> None:
         now = self.get_clock().now()

@@ -22,6 +22,7 @@ S
 ?
 Z                 # zero encoder counts, bench-test helper
 R                 # report raw encoder pin levels, bench-test helper
+B                 # poll battery/supply voltage status
 P <kp> <ki> <kd>
 ```
 
@@ -30,13 +31,14 @@ Arduino to Pi:
 ```text
 BOOT arduino_nano_base_controller
 E <millis> <left_position> <right_position> <left_tps> <right_tps> <left_pwm> <right_pwm>
-R <millis> <left_s1> <left_s2> <right_s1> <right_s2>
+R <millis> <left_s1> <left_s2> <right_s1> <right_s2> <left_s1_edges> <left_s2_edges> <right_s1_edges> <right_s2_edges>
+B <millis> <source> <adc_raw> <v_supply_mV>   # source: 0=unknown, 1=battery, 2=dc_external
 OK stop
 OK zero
 ERR ...
 ```
 
-The firmware intentionally does not acknowledge every `V` velocity command to avoid serial chatter at control-loop rate.
+The firmware intentionally does not acknowledge every `V` velocity command to avoid serial chatter at control-loop rate. Battery status is polled by the ROS node (default every 5 s) rather than streamed continuously.
 
 ## Build
 
@@ -58,7 +60,26 @@ Useful checks:
 ```bash
 ros2 topic echo /arduino_base_node/status_raw --once
 ros2 topic echo /odom --once
+ros2 topic echo /arduino_base_node/battery_state --once
 ```
+
+## Battery / supply voltage sensing
+
+The Arduino samples `A0` through a 2:1 resistor divider (two 12kΩ resistors) on the sensed supply rail. The same divider sees ~9 V on DC adapter input and ~7.4–8.4 V on the 2S Li-ion battery, so the pin voltage stays in the ~3.7–4.5 V range (must remain below 5 V). The firmware assumes a 5 V ADC reference and reports supply voltage in millivolts.
+
+`arduino_base_node` periodically sends `B` and publishes `sensor_msgs/msg/BatteryState` on `~/battery_state`:
+
+- **DC/external supply:** `power_supply_status=NOT_CHARGING`, `present=true`
+- **Battery:** `power_supply_status=DISCHARGING`, `power_supply_technology=LION`, `present=true`, approximate `percentage` derived from `battery_empty_voltage`/`battery_full_voltage` when configured
+
+Key parameters (see `config/arduino_base.yaml`):
+
+- `battery_poll_period_s` — polling interval in seconds (`<= 0` disables)
+- `battery_frame_id`, `battery_location`
+- `battery_voltage_scale` — ROS-side calibration multiplier applied to measured voltage
+- `battery_source_dc_min_v` — voltage threshold for classifying external/DC supply
+- `battery_voltage_min_v`, `battery_voltage_max_v` — plausible battery voltage bounds
+- `battery_full_voltage`, `battery_empty_voltage` — rough percentage mapping bounds (2S Li-ion defaults)
 
 ## Enable motors only when safe
 
