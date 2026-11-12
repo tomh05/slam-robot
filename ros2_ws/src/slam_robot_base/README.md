@@ -85,10 +85,11 @@ Key parameters (see `config/arduino_base.yaml`):
 ## BM160 IMU calibration
 
 `bm160_imu_node` publishes raw BMI160/BM160 data on `/imu/data`. Before the EKF
-fuses it, two still-only calibrations must be done:
+fuses it, calibrate the gyro bias and accelerometer offsets:
 
 1. **Gyro bias** — while the robot sits still and level, the gyro should read 0.
-2. **Accel zero-g offset** — while still and level, one axis should read ~+9.81 m/s^2.
+2. **Accel offsets** — collect opposing static faces; their average removes the
+   gravity component and gives the offset for each axis.
 
 Helper script: `scripts/calibrate_imu.py` (run on the robot with ROS sourced):
 
@@ -97,12 +98,16 @@ cd ~/slam-robot
 source /opt/ros/jazzy/setup.bash && source ros2_ws/install/setup.bash
 # 1. Start the IMU+EKF stack (motors off is fine):
 ros2 launch slam_robot_bringup robot_core_ekf.launch.py
-# 2. In another terminal, keep the robot STILL and LEVEL for ~60 s:
-python3 scripts/calibrate_imu.py --duration 60
+# 2. In another terminal, follow the guided process:
+python3 scripts/calibrate_imu.py --duration 60 --face-duration 5
 ```
 
-It prints the mean gyro and mean accel. Then pass the values to the launch
-file (or set them as node params):
+The script first collects gyro bias while level, then prompts for +x/-x,
++y/-y, +z/-z static faces. It prints a complete launch-parameter block. Use
+stable 90-degree faces when safe; partial tilts are useful for sign checks but
+do not isolate accelerometer offsets reliably.
+
+The resulting values can be passed to the launch file (or set as node params):
 
 ```bash
 ros2 launch slam_robot_bringup robot_core_ekf.launch.py \
@@ -114,21 +119,10 @@ ros2 launch slam_robot_bringup robot_core_ekf.launch.py \
   imu_accel_offset_z:=9.70
 ```
 
-`gyro_bias_*` is subtracted from the gyro in rad/s; `accel_offset_*` is
-subtracted from the accel in m/s^2. After calibration, verify the orientation
-sign: command a slow left/CCW turn and confirm `angular_velocity.z > 0`. If not,
-flip `imu_yaw` in `slam_robot_description/urdf/slam_robot.urdf.xacro`.
-
-To check accelerometer axis signs without commanding motion, run the helper with
-`--verify`. It prompts for forward/backward and right/left tilt poses and
-averages each pose. A 90-degree tilt gives the clearest reading when safe;
-30–45 degrees is sufficient otherwise:
-
-```bash
-python3 scripts/calibrate_imu.py --verify --verify-duration 3
-```
-
-The expected sensor frame is right=`+x`, forward=`+y`, up=`+z`.
+`gyro_bias_*` and `accel_offset_*` are subtracted in the node. After
+calibration, verify the yaw orientation by commanding a slow left/CCW turn and
+confirming `angular_velocity.z > 0`. If not, flip `imu_yaw` in
+`slam_robot_description/urdf/slam_robot.urdf.xacro`.
 
 ## Enable motors only when safe
 

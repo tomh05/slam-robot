@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
-"""Calibrate IMU biases and verify accelerometer axis signs.
+"""Guided static calibration for BMI160/BM160 gyro and accelerometer.
 
 The BMI160/BM160 publishes raw sensor data on /imu/data (frame_id=imu_link).
-While the robot sits perfectly still on a level surface:
-  - mean angular_velocity  -> gyro bias to subtract (negate for gyro_bias_* params)
-  - mean linear_acceleration -> zero-g offset; the level axis should read ~+9.81 m/s^2
+The guided workflow collects gyro bias while level, then six static
+accelerometer faces. Opposing faces separate accelerometer bias from gravity:
+  accel_offset_x = (mean(+x face) + mean(-x face)) / 2
 
 Usage (on the robot, with ROS 2 sourced and the IMU+EKF stack running):
-  python3 ~/slam-robot/scripts/calibrate_imu.py --duration 60
-  python3 ~/slam-robot/scripts/calibrate_imu.py --verify
+  python3 ~/slam-robot/scripts/calibrate_imu.py
 
 Safety: this script only subscribes and reads. It never commands motion.
 """
@@ -16,7 +15,6 @@ Safety: this script only subscribes and reads. It never commands motion.
 from __future__ import annotations
 
 import argparse
-import math
 import sys
 import time
 
@@ -71,129 +69,127 @@ def collect(cal: ImuCalibrator, duration_s: float) -> dict:
     return cal.report()
 
 
-def print_verification(results: list[tuple[str, str, float, dict]]) -> bool:
-    print()
-    print('=' * 60)
-    print('ACCELEROMETER AXIS-SIGN VERIFICATION')
-    print('Positive means the expected sensor-frame direction was observed.')
-    print()
-    all_passed = True
-    for label, axis, expected_sign, result in results:
-        if not result:
-            print(f'{label}: ERROR: no samples received')
-            all_passed = False
+def print_calibration(gyro: dict, faces: dict[str, dict]) -> bool:
+    """Print offsets from opposing faces and return whether signs look valid."""
+    face_values = {
+        name: result['mean_accel']
+        for name, result in faces.items()
+        if result
+    }
+    offsets = []
+    valid = len(face_values) == 6
+    for axis, positive, negative, index in (
+        ('x', '+x', '-x', 0),
+        ('y', '+y', '-y', 1),
+        ('z', '+z', '-z', 2),
+    ):
+        if positive not in face_values or negative not in face_values:
+            offsets.append(None)
+            valid = False
             continue
-        ax, ay, az = result['mean_accel']
-        values = {'x': ax, 'y': ay, 'z': az}
-        measured = values[axis]
-        passed = measured * expected_sign > 1.0
-        all_passed = all_passed and passed
-        status = 'PASS' if passed else 'CHECK'
-        print(
-            f'{label}: {status}  '
-            f'a=({ax:+.3f}, {ay:+.3f}, {az:+.3f}) m/s^2; '
-            f'expected {axis}{"+" if expected_sign > 0 else "-"} '
-            f'(measured {measured:+.3f})'
-        )
+        positive_value = face_values[positive][index]
+        negative_value = face_values[negative][index]
+        offsets.append((positive_value + negative_value) / 2.0)
+        if positive_value <= 1.0 or negative_value >= -1.0:
+            valid = False
+
     print()
-    print('Expected frame: right=+x, forward=+y, up=+z.')
     print('=' * 60)
-    return all_passed
+    print('IMU CALIBRATION RESULTS')
+    print(f'Still samples collected: {gyro["n"]}')
+    gx, gy, gz = gyro['mean_gyro']
+    print()
+    print('Launch parameters:')
+    print(f'  imu_gyro_bias_x:={-gx:.6f}')
+    print(f'  imu_gyro_bias_y:={-gy:.6f}')
+    print(f'  imu_gyro_bias_z:={-gz:.6f}')
+    for axis, offset in zip(('x', 'y', 'z'), offsets):
+        if offset is None:
+            print(f'  imu_accel_offset_{axis}:=UNAVAILABLE')
+        else:
+            print(f'  imu_accel_offset_{axis}:={offset:.6f}')
+    print()
+    print('Accelerometer face checks (raw means, m/s^2):')
+    for name in ('+x', '-x', '+y', '-y', '+z', '-z'):
+        result = faces.get(name)
+        if result:
+            ax, ay, az = result['mean_accel']
+            print(f'  {name}: ({ax:+.3f}, {ay:+.3f}, {az:+.3f})')
+        else:
+            print(f'  {name}: no samples')
+    print()
+    if valid:
+        print('Axis checks: PASS (each positive face > +1 and negative face < -1).')
+    else:
+        print('Axis checks: CHECK FAILED (review pose directions and mounting).')
+    print('=' * 60)
+    return valid
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description='Calibrate BMI160/BM160 gyro bias and accel offset from a still recording.')
+    parser = argparse.ArgumentParser(description='Guided BMI160/BM160 static calibration.')
     parser.add_argument('--duration', type=float, default=60.0,
-                        help='seconds to collect while still (default: 60)')
+                        help='seconds for the level gyro-bias capture (default: 60)')
     parser.add_argument('--topic', default='/imu/data', help='Imu topic to read (default: /imu/data)')
-    parser.add_argument('--verify', action='store_true',
-                        help='prompt for tilt poses and verify accelerometer axis signs')
-    parser.add_argument('--verify-duration', type=float, default=3.0,
-                        help='seconds to average each verification pose (default: 3)')
+    parser.add_argument('--face-duration', type=float, default=5.0,
+                        help='seconds to average each accelerometer face (default: 5)')
+    parser.add_argument('--still-only', action='store_true',
+                        help='only collect the level gyro/accel burst (not a full calibration)')
     args = parser.parse_args()
 
     if args.duration <= 0:
         print('ERROR: --duration must be positive', file=sys.stderr)
         return 2
-    if args.verify_duration <= 0:
-        print('ERROR: --verify-duration must be positive', file=sys.stderr)
+    if args.face_duration <= 0:
+        print('ERROR: --face-duration must be positive', file=sys.stderr)
         return 2
 
     rclpy.init(args=None)
     cal = ImuCalibrator(args.topic)
 
-    if args.verify:
-        poses = (
-            ('Forward tilt', 'y', 1.0),
-            ('Backward tilt', 'y', -1.0),
-            ('Right side up', 'x', 1.0),
-            ('Left side up', 'x', -1.0),
-        )
-        print(f'Verifying accelerometer signs on {args.topic}.')
-        print('Use a safe, stable tilt of about 90 degrees if practical;')
-        print('30-45 degrees is sufficient if 90 degrees is not safe.')
-        print('Keep each pose still while it is being averaged.')
-        results = []
-        for label, axis, expected_sign in poses:
-            try:
-                input(f'\nPlace the robot in: {label}. Press Enter to collect...')
-            except (EOFError, KeyboardInterrupt):
-                print('\nVerification cancelled.', file=sys.stderr)
-                rclpy.shutdown()
-                return 130
-            result = collect(cal, args.verify_duration)
-            results.append((label, axis, expected_sign, result))
-            if result:
-                print(f'Collected {result["n"]} samples.')
-            else:
-                print('ERROR: no samples received.', file=sys.stderr)
-        rclpy.shutdown()
-        return 0 if print_verification(results) else 1
-
-    print(f'Collecting IMU data for {args.duration:g} s on {args.topic}...')
-    print('KEEP THE ROBOT STILL AND LEVEL. Do not touch it.')
+    print(f'Guided IMU calibration on {args.topic}.')
+    print('This script only reads IMU data; it never commands the robot.')
+    print(f'\nKeep the robot level and still for {args.duration:g} s.')
     sys.stdout.flush()
-    r = collect(cal, args.duration)
-
-    rclpy.shutdown()
-
-    if not r:
+    gyro = collect(cal, args.duration)
+    if not gyro:
+        rclpy.shutdown()
         print(f'ERROR: no {args.topic} samples received. Is the IMU node running?', file=sys.stderr)
         return 1
 
-    gx, gy, gz = r['mean_gyro']
-    ax, ay, az = r['mean_accel']
-    print()
-    print('=' * 60)
-    print(f'Samples collected: {r["n"]}')
-    print()
-    print('MEAN GYRO (rad/s):')
-    print(f'  x = {gx:+.6f}')
-    print(f'  y = {gy:+.6f}')
-    print(f'  z = {gz:+.6f}')
-    print()
-    print('  -> Set on bm160_imu_node (launch arg or param):')
-    print(f'     gyro_bias_x = {-gx:.6f}')
-    print(f'     gyro_bias_y = {-gy:.6f}')
-    print(f'     gyro_bias_z = {-gz:.6f}')
-    print()
-    print('MEAN ACCEL (m/s^2):')
-    print(f'  x = {ax:+.6f}')
-    print(f'  y = {ay:+.6f}')
-    print(f'  z = {az:+.6f}')
-    mag = math.sqrt(ax * ax + ay * ay + az * az)
-    print(f'  |a| = {mag:.4f}  (expect ~9.81 on a level surface)')
-    if abs(mag - 9.81) > 1.5:
-        print('  WARNING: magnitude far from 9.81 -> surface may not be level, or')
-        print('  the sensor is accelerating. Re-check placement and re-run.')
-    print()
-    print('  -> Zero-g offset to subtract (software), set accel_offset_x/y/z on')
-    print('     bm160_imu_node:')
-    print(f'     accel_offset_x = {ax:.6f}')
-    print(f'     accel_offset_y = {ay:.6f}')
-    print(f'     accel_offset_z = {az:.6f}')
-    print('=' * 60)
-    return 0
+    if args.still_only:
+        rclpy.shutdown()
+        gx, gy, gz = gyro['mean_gyro']
+        print(f'\nGyro bias parameters: {-gx:.6f}, {-gy:.6f}, {-gz:.6f}')
+        print('A still-only accelerometer reading is not a valid 3-axis offset.')
+        return 0
+
+    print('\nNow collect six accelerometer faces.')
+    print('Use stable 90-degree faces when safe. Do not use 30-45 degree tilts')
+    print('for offset calibration: they do not isolate one axis well enough.')
+    faces = {}
+    for name, description in (
+        ('+x', 'right side up'),
+        ('-x', 'left side up'),
+        ('+y', 'front edge up / forward axis up'),
+        ('-y', 'rear edge up / backward axis up'),
+        ('+z', 'normal level / top side up'),
+        ('-z', 'upside down / bottom side up'),
+    ):
+        try:
+            input(f'\nPlace the robot with {description} ({name}). Press Enter...')
+        except (EOFError, KeyboardInterrupt):
+            print('\nCalibration cancelled.', file=sys.stderr)
+            rclpy.shutdown()
+            return 130
+        faces[name] = collect(cal, args.face_duration)
+        if faces[name]:
+            print(f'Collected {faces[name]["n"]} samples.')
+        else:
+            print('ERROR: no samples received.', file=sys.stderr)
+
+    rclpy.shutdown()
+    return 0 if print_calibration(gyro, faces) else 1
 
 
 if __name__ == '__main__':
