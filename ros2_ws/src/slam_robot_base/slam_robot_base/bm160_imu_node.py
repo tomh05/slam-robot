@@ -80,6 +80,12 @@ class Bm160ImuNode(Node):
         self.declare_parameter('gyro_bias_x', 0.0)
         self.declare_parameter('gyro_bias_y', 0.0)
         self.declare_parameter('gyro_bias_z', 0.0)
+        # Zero-g (still) accelerometer offset in m/s^2, subtracted after scaling.
+        # Calibrate with scripts/calibrate_imu.py: set to the mean accel read while
+        # the robot sits still and level (the level axis should read ~+9.81).
+        self.declare_parameter('accel_offset_x', 0.0)
+        self.declare_parameter('accel_offset_y', 0.0)
+        self.declare_parameter('accel_offset_z', 0.0)
         # Conservative defaults; calibrate/tune for your mounting and vibration.
         self.declare_parameter('angular_velocity_covariance', 0.02)
         self.declare_parameter('linear_acceleration_covariance', 0.04)
@@ -98,6 +104,11 @@ class Bm160ImuNode(Node):
             float(self.get_parameter('gyro_bias_x').value),
             float(self.get_parameter('gyro_bias_y').value),
             float(self.get_parameter('gyro_bias_z').value),
+        )
+        self.accel_offset = (
+            float(self.get_parameter('accel_offset_x').value),
+            float(self.get_parameter('accel_offset_y').value),
+            float(self.get_parameter('accel_offset_z').value),
         )
         ang_cov = float(self.get_parameter('angular_velocity_covariance').value)
         acc_cov = float(self.get_parameter('linear_acceleration_covariance').value)
@@ -215,9 +226,9 @@ class Bm160ImuNode(Node):
             gyr_z * self.gyr_scale - self.gyro_bias[2],
         )
         accel = (
-            acc_x * self.acc_scale,
-            acc_y * self.acc_scale,
-            acc_z * self.acc_scale,
+            acc_x * self.acc_scale - self.accel_offset[0],
+            acc_y * self.acc_scale - self.accel_offset[1],
+            acc_z * self.acc_scale - self.accel_offset[2],
         )
         return gyro, accel
 
