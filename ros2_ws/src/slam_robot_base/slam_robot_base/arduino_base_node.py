@@ -104,7 +104,7 @@ class ArduinoBaseNode(Node):
         self.declare_parameter('battery_poll_period_s', 5.0)
         self.declare_parameter('battery_frame_id', 'base_link')
         self.declare_parameter('battery_location', 'base')
-        self.declare_parameter('battery_voltage_scale', 1.0)
+        self.declare_parameter('battery_voltage_scale', 0.9346)
         self.declare_parameter('battery_source_dc_min_v', 8.7)
         self.declare_parameter('battery_voltage_min_v', 6.0)
         self.declare_parameter('battery_voltage_max_v', 9.5)

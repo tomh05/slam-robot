@@ -58,7 +58,9 @@ arduino_base_node:
     battery_poll_period_s: 5.0
     battery_frame_id: base_link
     battery_location: base
-    battery_voltage_scale: 1.0
+    # Calibrated from measured pack-vs-ROS pairs:
+    #   8.25/8.826 and 8.12/8.69 => average scale ~= 0.9346
+    battery_voltage_scale: 0.9346
     battery_source_dc_min_v: 8.7
     battery_voltage_min_v: 6.0
     battery_voltage_max_v: 9.5
