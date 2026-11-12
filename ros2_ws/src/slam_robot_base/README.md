@@ -107,22 +107,25 @@ The script first collects gyro bias while level, then prompts for +x/-x,
 stable 90-degree faces when safe; partial tilts are useful for sign checks but
 do not isolate accelerometer offsets reliably.
 
-The resulting values can be passed to the launch file (or set as node params):
+The values are stored in
+`ros2_ws/src/slam_robot_bringup/config/imu_calibration.yaml` and loaded
+automatically by the bringup launch:
 
 ```bash
-ros2 launch slam_robot_bringup robot_core_ekf.launch.py \
-  imu_gyro_bias_x:=-0.0123 \
-  imu_gyro_bias_y:=0.0045 \
-  imu_gyro_bias_z:=-0.0021 \
-  imu_accel_offset_x:=0.05 \
-  imu_accel_offset_y:=-0.12 \
-  imu_accel_offset_z:=9.70
+ros2 launch slam_robot_bringup robot_core_ekf.launch.py
 ```
 
 `gyro_bias_*` and `accel_offset_*` are subtracted in the node. After
 calibration, verify the yaw orientation by commanding a slow left/CCW turn and
 confirming `angular_velocity.z > 0`. If not, flip `imu_yaw` in
 `slam_robot_description/urdf/slam_robot.urdf.xacro`.
+
+To use a different calibration file without editing the launch file:
+
+```bash
+ros2 launch slam_robot_bringup robot_core_ekf.launch.py \
+  imu_calibration_file:=/path/to/imu_calibration.yaml
+```
 
 ## Enable motors only when safe
 
