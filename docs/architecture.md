@@ -202,18 +202,18 @@ Contents:
 
 ### 4.4 State estimation
 
-Initial:
+Initial target:
 
-- Encoder odometry directly from `diff_drive_controller`.
-- Lidar SLAM consumes `/odom` and `/scan`.
+- Encoder odometry from the base driver (`arduino_base_node` publishes `/odom`).
+- Lidar SLAM consumes odometry and `/scan`.
 
-Later:
+Current/preferred for tracked base:
 
-- Add `robot_localization` `ekf_node` if an IMU is added.
-- Fuse wheel odometry + IMU into `/odometry/filtered`.
-- Configure SLAM/Nav2 to use filtered odometry.
+- `robot_localization` `ekf_node` fuses wheel odometry + BM160 IMU into `/odometry/filtered` (`slam_robot_bringup/config/ekf.yaml`, `launch/robot_core_ekf.launch.py`).
+- **TF ownership:** exactly one `odom -> base_link` publisher. EKF path: `arduino_base.launch.py publish_tf:=false` + EKF `publish_tf: true`. Raw path: base publishes TF.
+- Configure `slam_toolbox`/Nav2 to use the selected odometry source consistently with TF (`/odometry/filtered` preferred once validated).
 
-For a tracked platform, an IMU is strongly recommended later because track slip during turns degrades encoder-only yaw.
+For a tracked platform, IMU-assisted yaw is important because track slip degrades encoder-only yaw. Covariances, gyro bias, and mount alignment must be calibrated before trusting filtered odom for mapping.
 
 ### 4.5 SLAM
 
@@ -315,32 +315,27 @@ Avoid custom messages at first. Add only if the base controller needs robot-spec
 
 ## 6. Runtime launch layers
 
-Use multiple launch files rather than one huge launch file:
+Use multiple launch files rather than one huge launch file. Keep sensor/base/estimation/SLAM layers separable for bringup and debugging.
 
-- `description.launch.py`
-  - robot_state_publisher
-  - static transforms if not in URDF
-- `base.launch.py`
-  - ros2_control controller manager
-  - diff_drive_controller
-  - base hardware interface/MCU bridge
-- `lidar.launch.py`
-  - lidar driver
-  - device path and lidar model config
-- `slam.launch.py`
-  - `slam_toolbox` online mapping
-- `localization.launch.py`
-  - map server + AMCL or slam_toolbox localisation mode
-- `navigation.launch.py`
-  - Nav2
-- `bringup.launch.py`
-  - includes the required set for a chosen mode
+**Current launches (implemented):**
+- `slam_robot_description/launch/robot_state_publisher.launch.py` — `robot_state_publisher` + URDF.
+- `slam_robot_base/launch/arduino_base.launch.py` — Arduino base node (`/cmd_vel` -> serial -> `/odom`, optional `publish_tf`, `motors_enabled` default false).
+- `slam_robot_bringup/launch/robot_core.launch.py` — description + base (raw odom TF path).
+- `slam_robot_bringup/launch/robot_core_ekf.launch.py` — description + base (`publish_tf:=false`) + BM160 IMU + `robot_localization` EKF (`/odometry/filtered`, EKF owns `odom->base_link`).
+- `scripts/start_robot_local.sh` — convenience script to start robot core (motors-enabled option) + `lidar_scan_publisher`.
+
+**Planned/target layers for SLAM & beyond:**
+- `lidar.launch.py` (or equivalent wrapper around `lidar_scan_publisher`) — device/baud/frame/invert params.
+- `slam_mapping.launch.py` + `config/slam_toolbox_mapping.yaml` — `slam_toolbox` online async mapping consuming `/scan` + selected odom/TF contract.
+- `localization.launch.py` — map server + AMCL or `slam_toolbox` localisation mode.
+- `navigation.launch.py` — Nav2.
+- `bringup.launch.py` — composes a chosen mode.
 
 Suggested bringup modes:
 
-- `mode:=teleop` — base + lidar + description, no SLAM.
-- `mode:=mapping` — base + lidar + description + SLAM.
-- `mode:=navigation` — base + lidar + description + localisation + Nav2.
+- `mode:=teleop` — base (+EKF option) + lidar + description, no SLAM.
+- `mode:=mapping` — base (+EKF option) + lidar + description + SLAM (`slam_toolbox` publishes `map->odom`).
+- `mode:=navigation` — base (+EKF option) + lidar + description + localisation + Nav2.
 - `use_sim_time:=true/false` — for bag replay/simulation later.
 - `use_fake_base:=true/false` — for laptop testing without hardware.
 

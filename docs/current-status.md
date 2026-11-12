@@ -1,6 +1,6 @@
 # Current Status / Next Session Entry Point
 
-Last updated: 2026-07-30 (BM160 IMU + `robot_localization` EKF repo integration; user reported “looks good now”).
+Last updated: 2026-07-30 (BM160 IMU + `robot_localization` EKF repo integration; SLAM introduction plan documented).
 
 ## Recent update: BM160 IMU + EKF (repo integration)
 
@@ -32,7 +32,35 @@ Verify: `ros2 topic hz /imu/data /odom /odometry/filtered`, `ros2 topic echo /od
 
 **Gotcha:** if a new launch/config isn’t found after build, the robot may not have the latest source — sync from laptop (`./scripts/sync_to_robot.sh` or equivalent), then rebuild the affected package(s).
 
-**Next IMU/EKF steps:** calibrate `bm160_imu_node` `gyro_bias_*`; tune covariances (IMU + `arduino_base_node` odom placeholders in `arduino_base_node.py:301-306`); set measured `imu_x/y/z`; validate filtered yaw vs wheel odom during slip/turns; only then consider experimental accel fusion. For SLAM, use filtered odometry + `/scan` + TF with `slam_toolbox`/Nav2 (IMU/accel alone is not reliable position). Details: [`imu-bm160-session-notes.md`](imu-bm160-session-notes.md).
+**Next IMU/EKF steps:** calibrate `bm160_imu_node` `gyro_bias_*`; tune covariances (IMU + `arduino_base_node` odom placeholders in `arduino_base_node.py:301-306`); set measured `imu_x/y/z`; validate filtered yaw vs wheel odom during slip/turns; only then consider experimental accel fusion. For SLAM, prefer filtered odometry `/odometry/filtered` + `/scan` + consistent TF with `slam_toolbox`/Nav2 (IMU/accel alone is not reliable position). Details: [`imu-bm160-session-notes.md`](imu-bm160-session-notes.md).
+
+## SLAM introduction plan (next)
+
+**Goal:** first online 2D map with `slam_toolbox` (Phase 8 in [`implementation-plan.md`](implementation-plan.md)), using existing lidar/base/TF pieces.
+
+### Prerequisites / gate checks
+- **Sync/build on Pi:** `./scripts/sync_to_robot.sh` then on Pi `source /opt/ros/jazzy/setup.bash && cd ~/slam-robot/ros2_ws && colcon build --symlink-install && source install/setup.bash`.
+- **Install deps (headless, 16 GB):** `sudo apt install -y ros-jazzy-slam-toolbox` (and `ros-jazzy-nav2-map-server` if using `map_saver_cli` on-Pi). Keep RViz/Gazebo/full Nav2 off-Pi initially.
+- **Choose odometry source (one contract):**
+  - **Preferred:** EKF path `ros2 launch slam_robot_bringup robot_core_ekf.launch.py` → `/odometry/filtered`, EKF owns `odom->base_link` (`arduino_base publish_tf:=false`).
+  - **Fallback:** raw path `robot_core.launch.py` (base owns `odom->base_link`) only if EKF/IMU not yet validated.
+  - Never run two `odom->base_link` publishers.
+- **Verify inputs before mapping:** `ros2 topic hz /scan /imu/data /odom /odometry/filtered` (as applicable), `ros2 run tf2_ros tf2_echo odom base_link`, `ros2 run tf2_tools view_frames` (expect `odom->base_link->lidar_link`, no `map` yet), `/scan` `frame_id=lidar_link` and sane orientation/ranges.
+- **Calibration blockers to respect:** floor-calibrated ticks-per-metre/effective skid-steer yaw separation, encoder/motor sign consistency, IMU mount/alignment and covariances; map quality depends on odom/TF quality. Drive slow, tracks lifted for first motion checks, motors disabled by default.
+
+### Planned repo changes (`slam_robot_bringup`)
+- Add `ros2_ws/src/slam_robot_bringup/config/slam_toolbox_mapping.yaml` (online async mapping, `use_sim_time: false`, `map_frame: map`, `odom_frame: odom`, `base_frame: base_link` or consistent `base_footprint`, `scan_topic: /scan`, conservative tracked-robot update/timeout settings).
+- Add `ros2_ws/src/slam_robot_bringup/launch/slam_mapping.launch.py` (starts `slam_toolbox` with params; optional args for sim time / odom topic selection as needed). Keep lidar/base/description layers separable (see `docs/architecture.md`).
+- Update `ros2_ws/src/slam_robot_bringup/CMakeLists.txt` and `package.xml` to install `config/` + launch and `exec_depend` on `slam_toolbox` (and map server if required).
+
+### First mapping workflow
+1. Core stack + `lidar_scan_publisher` (`scripts/start_robot_local.sh` or separate terminals) → static `/scan` check in laptop RViz (`fixed frame` `map` once SLAM runs; before that check in `base_link`/`odom`).
+2. Start `slam_mapping.launch.py` with selected odom/TF source; confirm `/map` and `map->odom` TF appear.
+3. Teleop a small area very slowly (smooth turns, minimal slip).
+4. Save map: `mkdir -p ~/maps && ros2 run nav2_map_server map_saver_cli -f ~/maps/<name>` (produces `.yaml` + image).
+5. If distorted: debug in order TF/odom source & rates → lidar frame/orientation/timestamps → odom calibration/covariances → SLAM params.
+
+**References:** https://github.com/SteveMacenski/slam_toolbox (ROS 2 config/modes), https://docs.ros.org/en/jazzy/p/robot_localization/, `docs/lidar-protocol-findings-2025-10-23.md`. Next after a good map: localization mode / Nav2 (Phases 9–10).
 
 ## Immediate state
 

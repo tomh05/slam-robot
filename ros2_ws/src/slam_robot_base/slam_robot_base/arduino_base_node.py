@@ -360,7 +360,6 @@ class ArduinoBaseNode(Node):
         msg.charge = float('nan')
         msg.capacity = float('nan')
         msg.design_capacity = float('nan')
-        msg.percentage = float('nan')
         msg.power_supply_health = BatteryState.POWER_SUPPLY_HEALTH_UNKNOWN
         msg.power_supply_technology = BatteryState.POWER_SUPPLY_TECHNOLOGY_UNKNOWN
         msg.present = False
@@ -380,14 +379,13 @@ class ArduinoBaseNode(Node):
             msg.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_DISCHARGING
             msg.power_supply_technology = BatteryState.POWER_SUPPLY_TECHNOLOGY_LION
             msg.present = True
-            if self.battery_full_voltage > self.battery_empty_voltage:
-                pct = (voltage - self.battery_empty_voltage) / (
-                    self.battery_full_voltage - self.battery_empty_voltage
-                )
-                msg.percentage = float(max(0.0, min(1.0, pct)))
         else:
             msg.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_UNKNOWN
             msg.present = False
+
+        # Estimate SoC from the sample 2S Li-ion OCV lookup (clamped to [0, 1]).
+        # Note: this is an approximation; voltage sag under load and cell variation affect accuracy.
+        msg.percentage = float(self.voltage_to_percentage(voltage))
 
         if self.last_battery_source != status.source:
             source_names = {0: 'unknown', 1: 'battery', 2: 'dc_external'}
@@ -480,6 +478,50 @@ class ArduinoBaseNode(Node):
         if ticks_per_rev > 0.0:
             return ticks_per_rev / (2.0 * math.pi * wheel_radius_m)
         return default_tpm
+
+    # Sample 2S Li-ion OCV (resting/open-circuit) curve: (pack_voltage_v, soc_fraction).
+    # Approximate for typical LiCoO2/NMC cells; tune for your specific pack.
+    BATTERY_OCV_TABLE = (
+        (8.40, 1.00),
+        (8.30, 0.95),
+        (8.22, 0.90),
+        (8.16, 0.85),
+        (8.04, 0.80),
+        (7.96, 0.75),
+        (7.90, 0.70),
+        (7.82, 0.65),
+        (7.74, 0.60),
+        (7.70, 0.55),
+        (7.68, 0.50),
+        (7.64, 0.45),
+        (7.60, 0.40),
+        (7.58, 0.35),
+        (7.54, 0.30),
+        (7.50, 0.25),
+        (7.46, 0.20),
+        (7.42, 0.15),
+        (7.38, 0.10),
+        (7.22, 0.05),
+        (6.60, 0.00),
+    )
+
+    @classmethod
+    def voltage_to_percentage(cls, voltage: float) -> float:
+        """Estimate battery state-of-charge fraction from resting pack voltage."""
+        table = cls.BATTERY_OCV_TABLE
+        if voltage >= table[0][0]:
+            return 1.0
+        if voltage <= table[-1][0]:
+            return 0.0
+        for i in range(len(table) - 1):
+            v_high, soc_high = table[i]
+            v_low, soc_low = table[i + 1]
+            if v_low <= voltage <= v_high:
+                if v_high == v_low:
+                    return soc_high
+                fraction = (voltage - v_low) / (v_high - v_low)
+                return soc_low + fraction * (soc_high - soc_low)
+        return 0.0
 
     @staticmethod
     def normalize_angle(angle: float) -> float:

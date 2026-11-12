@@ -320,33 +320,47 @@ Make encoder odometry plausible enough for SLAM.
 
 ### Goals
 
-Generate a map while teleoperating.
+Generate a first usable 2D occupancy map while teleoperating, using existing lidar/base/TF/odometry components.
+
+### Prerequisites (gates)
+
+- [ ] Sync and build latest workspace on Pi: `./scripts/sync_to_robot.sh` then `cd ~/slam-robot/ros2_ws && source /opt/ros/jazzy/setup.bash && colcon build --symlink-install && source install/setup.bash`.
+- [ ] Install SLAM deps on Pi (headless): `sudo apt install -y ros-jazzy-slam-toolbox` and optionally `ros-jazzy-nav2-map-server` for `map_saver_cli`.
+- [ ] Odometry/TF contract chosen (exactly one `odom -> base_link` publisher):
+  - Preferred: `ros2 launch slam_robot_bringup robot_core_ekf.launch.py` (EKF publishes TF, use `/odometry/filtered` as local odom).
+  - Fallback: `ros2 launch slam_robot_bringup robot_core.launch.py` (raw `/odom`, base publishes TF) if EKF/IMU not validated.
+- [ ] Input checks pass: `ros2 topic hz /scan` (and `/odometry/filtered` or `/odom`), `ros2 run tf2_ros tf2_echo odom base_link`, `ros2 run tf2_tools view_frames` shows `odom->base_link->lidar_link` with sane `/scan` `frame_id` and orientation.
+- [ ] Calibration sanity: floor ticks-per-metre/yaw separation and lidar/IMU alignment good enough for slow mapping; motors safe (lifted for first motion tests).
+
+### Planned bringup/config additions (`ros2_ws/src/slam_robot_bringup`)
+
+- [ ] Add `config/slam_toolbox_mapping.yaml` (online async mapping): `use_sim_time: false`, frames `map`/`odom`/`base_link` (or consistent `base_footprint`), `scan_topic: /scan`, conservative update/timeout/resolution settings for slow tracked motion.
+- [ ] Add `launch/slam_mapping.launch.py` to start `slam_toolbox` with the mapping params (keep base/lidar/description layers separable per `docs/architecture.md`).
+- [ ] Update `slam_robot_bringup/CMakeLists.txt` and `package.xml` to install `config/` and new launch, and add `exec_depend` on `slam_toolbox` (and `nav2_map_server` if used for saving).
 
 ### Tasks
 
-- [ ] Install/configure `slam_toolbox`.
-- [ ] Launch base, lidar, robot description, and SLAM.
-- [ ] Teleoperate slowly around a small room.
-- [ ] Visualise `/map`, `/scan`, TF, and robot pose in RViz.
-- [ ] Tune SLAM parameters if map is distorted:
-  - scan matching settings
-  - transform timeouts
-  - map resolution
-  - minimum travel distance/heading between updates
+- [ ] Static sensor check: core stack + `lidar_scan_publisher` (e.g. `scripts/start_robot_local.sh` or separate terminals), confirm `/scan` in RViz.
+- [ ] Start SLAM: launch `slam_mapping.launch.py` with selected odom/TF source; confirm `/map` and `map->odom` are published.
+- [ ] Teleoperate slowly around a small area (smooth turns, minimal slip); visualise `/map`, `/scan`, TF, robot model in RViz (fixed frame `map`).
+- [ ] Tune if distorted (in order): TF/odom rates & source, lidar pose/orientation/timestamps, odom/EKF calibration & covariances, then `slam_toolbox` params (transform timeout, min travel/heading update, resolution, matcher/buffer).
 - [ ] Save map.
 
 ### Commands
 
-Example map save command, exact package names may vary by ROS distro:
-
 ```bash
+# Example: core + lidar (separate terminals as needed), then SLAM
+ros2 launch slam_robot_bringup slam_mapping.launch.py
+
+# Save map (after ros-jazzy-nav2-map-server install)
+mkdir -p ~/maps
 ros2 run nav2_map_server map_saver_cli -f ~/maps/test_map
 ```
 
 ### Acceptance test
 
-- A recognisable occupancy grid map is produced.
-- The map can be saved as `.yaml` + image.
+- A recognisable occupancy grid map is produced with stable `map -> odom -> base_link -> lidar_link` TF.
+- The map can be saved as `.yaml` + image and reloaded for inspection.
 - Restarting RViz can display the saved map.
 
 ## Phase 9: Localisation and Nav2
@@ -417,8 +431,8 @@ journalctl -u slam-robot -f
 
 ## Suggested immediate next actions
 
-1. Fill in the hardware inventory template.
-2. Photograph labels and wiring for lidar, motor driver, encoders, battery/regulator.
-3. Confirm whether the Pi is a Pi 4 and whether you are happy to reimage its SD card.
-4. Identify the lidar model so we can pick the correct ROS 2 driver.
-5. Decide whether to use direct GPIO first or add/use a microcontroller/motor controller for low-level base control.
+1. **Validate SLAM prerequisites on Pi:** sync/build latest repo, install `ros-jazzy-slam-toolbox` (+ `nav2_map_server` if needed), and confirm a clean input set: `/scan`, chosen odom (`/odometry/filtered` preferred via `robot_core_ekf.launch.py` or raw `/odom`), and a single `odom->base_link` TF source.
+2. **Check calibration/alignment before mapping:** floor-test ticks-per-metre and effective skid-steer yaw, confirm lidar/IMU mounting/orientation, and review odom/IMU covariances (tracked slip will dominate map quality).
+3. **Add SLAM bringup in `slam_robot_bringup`:** `config/slam_toolbox_mapping.yaml`, `launch/slam_mapping.launch.py`, and package install/exec dependencies per Phase 8.
+4. **Run first mapping session:** static scan check, slow teleop in a small area, save map to `~/maps/`, and tune from artifacts (TF/odom/lidar first, then SLAM params).
+5. **After a good map:** proceed to Phase 9 (localization mode / Nav2) and resolve remaining power/safety/open hardware items in [`open-questions.md`](open-questions.md).
