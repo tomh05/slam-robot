@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Collect a still IMU burst and print gyro bias / accel zero-g offset.
+"""Calibrate IMU biases and verify accelerometer axis signs.
 
 The BMI160/BM160 publishes raw sensor data on /imu/data (frame_id=imu_link).
 While the robot sits perfectly still on a level surface:
@@ -8,6 +8,7 @@ While the robot sits perfectly still on a level surface:
 
 Usage (on the robot, with ROS 2 sourced and the IMU+EKF stack running):
   python3 ~/slam-robot/scripts/calibrate_imu.py --duration 60
+  python3 ~/slam-robot/scripts/calibrate_imu.py --verify
 
 Safety: this script only subscribes and reads. It never commands motion.
 """
@@ -25,19 +26,19 @@ from sensor_msgs.msg import Imu
 
 
 class ImuCalibrator(Node):
-    def __init__(self, duration_s: float):
+    def __init__(self, topic: str):
         super().__init__('imu_calibrator')
-        self.duration_s = duration_s
-        # Start the clock at construction so the loop always terminates even if
-        # no /imu/data samples ever arrive (previously start_time was only set
-        # inside the callback, which made done() hang forever with no data).
-        self.start_time = time.monotonic()
         self.n = 0
         self.sum_gx = self.sum_gy = self.sum_gz = 0.0
         self.sum_ax = self.sum_ay = self.sum_az = 0.0
         self.subscription = self.create_subscription(
-            Imu, '/imu/data', self._callback, 10
+            Imu, topic, self._callback, 10
         )
+
+    def reset(self) -> None:
+        self.n = 0
+        self.sum_gx = self.sum_gy = self.sum_gz = 0.0
+        self.sum_ax = self.sum_ay = self.sum_az = 0.0
 
     def _callback(self, msg: Imu) -> None:
         self.sum_gx += msg.angular_velocity.x
@@ -47,9 +48,6 @@ class ImuCalibrator(Node):
         self.sum_ay += msg.linear_acceleration.y
         self.sum_az += msg.linear_acceleration.z
         self.n += 1
-
-    def done(self) -> bool:
-        return (time.monotonic() - self.start_time) >= self.duration_s
 
     def report(self) -> dict:
         if self.n == 0:
@@ -61,36 +59,106 @@ class ImuCalibrator(Node):
         }
 
 
+def collect(cal: ImuCalibrator, duration_s: float) -> dict:
+    """Collect and average samples for a bounded interval."""
+    cal.reset()
+    deadline = time.monotonic() + duration_s
+    while rclpy.ok() and time.monotonic() < deadline:
+        rclpy.spin_once(cal, timeout_sec=0.1)
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(remaining, 0.25))
+    return cal.report()
+
+
+def print_verification(results: list[tuple[str, str, float, dict]]) -> bool:
+    print()
+    print('=' * 60)
+    print('ACCELEROMETER AXIS-SIGN VERIFICATION')
+    print('Positive means the expected sensor-frame direction was observed.')
+    print()
+    all_passed = True
+    for label, axis, expected_sign, result in results:
+        if not result:
+            print(f'{label}: ERROR: no samples received')
+            all_passed = False
+            continue
+        ax, ay, az = result['mean_accel']
+        values = {'x': ax, 'y': ay, 'z': az}
+        measured = values[axis]
+        passed = measured * expected_sign > 1.0
+        all_passed = all_passed and passed
+        status = 'PASS' if passed else 'CHECK'
+        print(
+            f'{label}: {status}  '
+            f'a=({ax:+.3f}, {ay:+.3f}, {az:+.3f}) m/s^2; '
+            f'expected {axis}{"+" if expected_sign > 0 else "-"} '
+            f'(measured {measured:+.3f})'
+        )
+    print()
+    print('Expected frame: right=+x, forward=+y, up=+z.')
+    print('=' * 60)
+    return all_passed
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description='Calibrate BMI160/BM160 gyro bias and accel offset from a still recording.')
     parser.add_argument('--duration', type=float, default=60.0,
                         help='seconds to collect while still (default: 60)')
     parser.add_argument('--topic', default='/imu/data', help='Imu topic to read (default: /imu/data)')
+    parser.add_argument('--verify', action='store_true',
+                        help='prompt for tilt poses and verify accelerometer axis signs')
+    parser.add_argument('--verify-duration', type=float, default=3.0,
+                        help='seconds to average each verification pose (default: 3)')
     args = parser.parse_args()
 
     if args.duration <= 0:
         print('ERROR: --duration must be positive', file=sys.stderr)
         return 2
+    if args.verify_duration <= 0:
+        print('ERROR: --verify-duration must be positive', file=sys.stderr)
+        return 2
 
     rclpy.init(args=None)
-    cal = ImuCalibrator(args.duration)
+    cal = ImuCalibrator(args.topic)
+
+    if args.verify:
+        poses = (
+            ('Forward tilt', 'y', 1.0),
+            ('Backward tilt', 'y', -1.0),
+            ('Right side up', 'x', 1.0),
+            ('Left side up', 'x', -1.0),
+        )
+        print(f'Verifying accelerometer signs on {args.topic}.')
+        print('Use a safe, stable tilt of about 90 degrees if practical;')
+        print('30-45 degrees is sufficient if 90 degrees is not safe.')
+        print('Keep each pose still while it is being averaged.')
+        results = []
+        for label, axis, expected_sign in poses:
+            try:
+                input(f'\nPlace the robot in: {label}. Press Enter to collect...')
+            except (EOFError, KeyboardInterrupt):
+                print('\nVerification cancelled.', file=sys.stderr)
+                rclpy.shutdown()
+                return 130
+            result = collect(cal, args.verify_duration)
+            results.append((label, axis, expected_sign, result))
+            if result:
+                print(f'Collected {result["n"]} samples.')
+            else:
+                print('ERROR: no samples received.', file=sys.stderr)
+        rclpy.shutdown()
+        return 0 if print_verification(results) else 1
 
     print(f'Collecting IMU data for {args.duration:g} s on {args.topic}...')
     print('KEEP THE ROBOT STILL AND LEVEL. Do not touch it.')
     sys.stdout.flush()
-
-    deadline = time.monotonic() + args.duration
-    while rclpy.ok() and time.monotonic() < deadline:
-        rclpy.spin_once(cal, timeout_sec=0.1)
-        remaining = deadline - time.monotonic()
-        if remaining > 0:
-            time.sleep(min(remaining, 0.25))  # ~4 Hz status heartbeat
+    r = collect(cal, args.duration)
 
     rclpy.shutdown()
 
-    r = cal.report()
     if not r:
-        print('ERROR: no /imu/data samples received. Is bm160_imu_node running?', file=sys.stderr)
+        print(f'ERROR: no {args.topic} samples received. Is the IMU node running?', file=sys.stderr)
         return 1
 
     gx, gy, gz = r['mean_gyro']
@@ -120,7 +188,7 @@ def main() -> int:
         print('  the sensor is accelerating. Re-check placement and re-run.')
     print()
     print('  -> Zero-g offset to subtract (software), set accel_offset_x/y/z on')
-    print('     bm160_imu_node (currently NOT applied by the node):')
+    print('     bm160_imu_node:')
     print(f'     accel_offset_x = {ax:.6f}')
     print(f'     accel_offset_y = {ay:.6f}')
     print(f'     accel_offset_z = {az:.6f}')

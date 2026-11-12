@@ -119,6 +119,17 @@ subtracted from the accel in m/s^2. After calibration, verify the orientation
 sign: command a slow left/CCW turn and confirm `angular_velocity.z > 0`. If not,
 flip `imu_yaw` in `slam_robot_description/urdf/slam_robot.urdf.xacro`.
 
+To check accelerometer axis signs without commanding motion, run the helper with
+`--verify`. It prompts for forward/backward and right/left tilt poses and
+averages each pose. A 90-degree tilt gives the clearest reading when safe;
+30–45 degrees is sufficient otherwise:
+
+```bash
+python3 scripts/calibrate_imu.py --verify --verify-duration 3
+```
+
+The expected sensor frame is right=`+x`, forward=`+y`, up=`+z`.
+
 ## Enable motors only when safe
 
 ```bash
