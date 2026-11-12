@@ -77,6 +77,7 @@ Key parameters (see `config/arduino_base.yaml`):
 - `battery_poll_period_s` — polling interval in seconds (`<= 0` disables)
 - `battery_frame_id`, `battery_location`
 - `battery_voltage_scale` — ROS-side calibration multiplier applied to measured voltage
+  (default `0.9346`, from measured pack-vs-ROS ratio)
 - `battery_source_dc_min_v` — voltage threshold for classifying external/DC supply
 - `battery_voltage_min_v`, `battery_voltage_max_v` — plausible battery voltage bounds
 - `battery_full_voltage`, `battery_empty_voltage` — rough percentage mapping bounds (2S Li-ion defaults)
