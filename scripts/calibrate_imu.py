@@ -28,7 +28,10 @@ class ImuCalibrator(Node):
     def __init__(self, duration_s: float):
         super().__init__('imu_calibrator')
         self.duration_s = duration_s
-        self.start_time: float | None = None
+        # Start the clock at construction so the loop always terminates even if
+        # no /imu/data samples ever arrive (previously start_time was only set
+        # inside the callback, which made done() hang forever with no data).
+        self.start_time = time.monotonic()
         self.n = 0
         self.sum_gx = self.sum_gy = self.sum_gz = 0.0
         self.sum_ax = self.sum_ay = self.sum_az = 0.0
@@ -37,8 +40,6 @@ class ImuCalibrator(Node):
         )
 
     def _callback(self, msg: Imu) -> None:
-        if self.start_time is None:
-            self.start_time = self.get_clock().now().seconds_since_epoch
         self.sum_gx += msg.angular_velocity.x
         self.sum_gy += msg.angular_velocity.y
         self.sum_gz += msg.angular_velocity.z
@@ -48,10 +49,7 @@ class ImuCalibrator(Node):
         self.n += 1
 
     def done(self) -> bool:
-        if self.start_time is None:
-            return False
-        elapsed = self.get_clock().now().seconds_since_epoch - self.start_time
-        return elapsed >= self.duration_s
+        return (time.monotonic() - self.start_time) >= self.duration_s
 
     def report(self) -> dict:
         if self.n == 0:
@@ -81,13 +79,12 @@ def main() -> int:
     print('KEEP THE ROBOT STILL AND LEVEL. Do not touch it.')
     sys.stdout.flush()
 
-    rate = cal.create_rate(0.25)  # 4 Hz status
-    while rclpy.ok() and not cal.done():
+    deadline = time.monotonic() + args.duration
+    while rclpy.ok() and time.monotonic() < deadline:
         rclpy.spin_once(cal, timeout_sec=0.1)
-        try:
-            rate.sleep()
-        except RuntimeError:
-            pass
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(remaining, 0.25))  # ~4 Hz status heartbeat
 
     rclpy.shutdown()
 
