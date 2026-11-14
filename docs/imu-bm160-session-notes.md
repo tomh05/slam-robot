@@ -59,7 +59,11 @@ sudo i2cdetect -y 1
 - [x] Calibrate IMU gyro bias (`gyro_bias_x/y/z` params on `bm160_imu_node`) and accel zero-g offset (`accel_offset_x/y/z`). Helper: `scripts/calibrate_imu.py` (subscribes `/imu/data`, prints mean gyro + mean accel while still/level). Both bias and offset are now applied in `_read_sample`.
 - [x] Expose gyro bias + accel offset as launch args on `robot_core_ekf.launch.py` (`imu_gyro_bias_x/y/z`, `imu_accel_offset_x/y/z`).
 - [ ] Run the still-level calibration on the Pi, apply the values, then verify orientation sign: slow left/CCW turn should give `angular_velocity.z > 0` (flip `imu_yaw` in URDF if not). **DONE 2026-07-30: CCW turn gives `angular_velocity.z > 0`, sign correct.**
-- [ ] Tune covariances (IMU `angular_velocity_covariance`/`linear_acceleration_covariance` + `arduino_base_node` odom placeholders) after biases are zero.
+- [x] Tune covariances (IMU `angular_velocity_covariance`/`linear_acceleration_covariance` + `arduino_base_node` odom placeholders) after biases are zero.
+  Use `scripts/calibrate_odom_cov.py`:
+    - `--imu-only`: static IMU noise variance (robot still/level)
+    - `--odom-drive`: odom yaw-rate residual during teleop drive
+  This replaces the placeholder covariances with tuned values.
 - [ ] Optional later: experiment with fusing IMU linear acceleration (`ax`/`ay`) only after orientation/gravity handling and covariances are validated; keep `two_d_mode` behavior in mind.
 - [ ] Point `slam_toolbox`/Nav2 at filtered odometry (`/odometry/filtered`) / ensure TF/odom frame config matches once SLAM bringup is wired.
 

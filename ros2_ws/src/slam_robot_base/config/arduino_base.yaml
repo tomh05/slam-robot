@@ -53,6 +53,17 @@ arduino_base_node:
     motors_enabled: false
     send_zero_when_disabled: true
 
+    # Odometry covariance placeholders (m^2 and (rad/s)^2).
+    # These tell robot_localization how much to trust raw wheel odom vs the
+    # EKF/SLAM. For a tracked base yaw is the weakest channel (track slip), so
+    # pose yaw covariance should be much larger than x/y. Tune with
+    # scripts/calibrate_odom_cov.py after encoder scale is calibrated.
+    odom_pose_x_cov: 0.05
+    odom_pose_y_cov: 0.05
+    odom_pose_yaw_cov: 0.20
+    odom_twist_vx_cov: 0.10
+    odom_twist_vyaw_cov: 0.30
+
     # Battery/supply sensing via Arduino A0 (2:1 divider, 12k/12k).
     # Polled with the 'B' serial command and published as sensor_msgs/BatteryState.
     battery_poll_period_s: 5.0
