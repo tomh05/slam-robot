@@ -51,12 +51,14 @@ sudo i2cdetect -y 1
 - [x] Add `robot_localization` EKF config: `ros2_ws/src/slam_robot_bringup/config/ekf.yaml` (fuses `/odom` + `/imu/data` -> `/odometry/filtered`).
 - [x] Resolve TF ownership for EKF path: `arduino_base.launch.py` accepts `publish_tf` (default `true` for non-EKF compatibility); `slam_robot_bringup/launch/robot_core_ekf.launch.py` passes `publish_tf:=false` so only EKF publishes `odom -> base_link`.
 - [x] Wire into bringup: `ros2_ws/src/slam_robot_bringup/launch/robot_core_ekf.launch.py` (description + base + `bm160_imu_node` + `ekf_filter_node`).
-- [x] Set IMU orientation from observed data: static `z=+9.81`; forward tilt `y=+9.81`, backward `y=-9.81`; right side `x=+9.81`, left `x=-9.81` => sensor frame `(right, forward, up)` => `imu_yaw = -1.5707963` in URDF. `imu_x/y/z` still provisional.
+- [x] Set IMU orientation from observed data: static `z=+9.81`; forward tilt `y=+9.81`, backward `y=-9.81`; right side `x=+9.81`, left `x=-9.81` => sensor frame `(right, forward, up)` => `imu_yaw = -1.5707963` in URDF.
+- [x] **Verified yaw sign (2026-07-30):** slow CCW turn (viewed from above) gives `angular_velocity.z > 0`. URDF `imu_yaw = -1.5707963` is correct; no flip needed.
+- [x] **Measured physical IMU mount (2026-07-30):** 6.5 cm forward of robot centre, 3.5 cm to the right of robot centre, 8 cm above the ground plane. Applied to `slam_robot.urdf.xacro` as `imu_x=0.065`, `imu_y=-0.035`, `imu_z=0.08` (REP-103: forward=+X, right=-Y, up=+Z).
 - [ ] On Pi: `sudo usermod -aG i2c ubuntu` (if needed), `sudo apt install -y ros-jazzy-robot-localization`, rebuild/sync affected packages, verify `/imu/data` and `/odometry/filtered`. User reported "looks good now".
-- [ ] Measure/set physical `imu_x/y/z` in `slam_robot_description/urdf/slam_robot.urdf.xacro`; validate left/CCW turn gives `angular_velocity.z > 0` and filtered yaw behaves correctly.
+- [x] Measure/set physical `imu_x/y/z` in `slam_robot_description/urdf/slam_robot.urdf.xacro`; validate left/CCW turn gives `angular_velocity.z > 0` and filtered yaw behaves correctly. **DONE 2026-07-30: measured mount 0.065/-0.035/0.08 m; yaw sign verified.**
 - [x] Calibrate IMU gyro bias (`gyro_bias_x/y/z` params on `bm160_imu_node`) and accel zero-g offset (`accel_offset_x/y/z`). Helper: `scripts/calibrate_imu.py` (subscribes `/imu/data`, prints mean gyro + mean accel while still/level). Both bias and offset are now applied in `_read_sample`.
 - [x] Expose gyro bias + accel offset as launch args on `robot_core_ekf.launch.py` (`imu_gyro_bias_x/y/z`, `imu_accel_offset_x/y/z`).
-- [ ] Run the still-level calibration on the Pi, apply the values, then verify orientation sign: slow left/CCW turn should give `angular_velocity.z > 0` (flip `imu_yaw` in URDF if not).
+- [ ] Run the still-level calibration on the Pi, apply the values, then verify orientation sign: slow left/CCW turn should give `angular_velocity.z > 0` (flip `imu_yaw` in URDF if not). **DONE 2026-07-30: CCW turn gives `angular_velocity.z > 0`, sign correct.**
 - [ ] Tune covariances (IMU `angular_velocity_covariance`/`linear_acceleration_covariance` + `arduino_base_node` odom placeholders) after biases are zero.
 - [ ] Optional later: experiment with fusing IMU linear acceleration (`ax`/`ay`) only after orientation/gravity handling and covariances are validated; keep `two_d_mode` behavior in mind.
 - [ ] Point `slam_toolbox`/Nav2 at filtered odometry (`/odometry/filtered`) / ensure TF/odom frame config matches once SLAM bringup is wired.
