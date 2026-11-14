@@ -8,7 +8,38 @@ arduino_base_node:
 
     # Initial measured mechanical values from hardware inventory.
     # track_width_m is the centre-to-centre distance between left/right track contact patches.
-    track_width_m: 0.155
+    # Motion calibration shows odom over-reports yaw by factor 1.53 → increase effective track_width.
+    track_width_m: 0.238
+
+    # Odometry covariance placeholders (m^2 and (rad/s)^2).
+    # These tell robot_localization how much to trust raw wheel odom vs the
+    # EKF/SLAM. For a skid-steer base yaw is the weakest channel (track slip), so
+    # pose yaw covariance should be much larger than x/y. Tune with
+    # scripts/calibrate_odom_cov.py after encoder scale is calibrated.
+    odom_pose_x_cov: 0.05
+    odom_pose_y_cov: 0.05
+    odom_pose_yaw_cov: 0.20
+    odom_twist_vx_cov: 0.10
+    odom_twist_vyaw_cov: 0.05
+
+    # Safety default: do not move motors until explicitly enabled.
+    motors_enabled: false
+    send_zero_when_disabled: true
+
+    # Battery/supply sensing via Arduino A0 (2:1 divider, 12k/12k).
+    # Polled with the 'B' serial command and published as sensor_msgs/BatteryState.
+    battery_poll_period_s: 5.0
+    battery_frame_id: base_link
+    battery_location: base
+    # Calibrated from measured pack-vs-ROS pairs:
+    #   8.25/8.826 and 8.12/8.69 => average scale ~= 0.9346
+    battery_voltage_scale: 0.9346
+    battery_source_dc_min_v: 8.7
+    battery_voltage_min_v: 6.0
+    battery_voltage_max_v: 9.5
+    # Approximate 2S Li-ion percentage bounds (set empty_voltage >= full_voltage to disable).
+    battery_full_voltage: 8.4
+    battery_empty_voltage: 6.6
     wheel_radius_m: 0.029
 
     # Encoder characterisation from bench calibration (S1 edges/2, manual wheel revs).
@@ -52,6 +83,17 @@ arduino_base_node:
     # Safety default: do not move motors until explicitly enabled.
     motors_enabled: false
     send_zero_when_disabled: true
+
+    # Odometry covariance placeholders (m^2 and (rad/s)^2).
+    # These tell robot_localization how much to trust raw wheel odom vs the
+    # EKF/SLAM. For a tracked base yaw is the weakest channel (track slip), so
+    # pose yaw covariance should be much larger than x/y. Tune with
+    # scripts/calibrate_odom_cov.py after encoder scale is calibrated.
+    odom_pose_x_cov: 0.05
+    odom_pose_y_cov: 0.05
+    odom_pose_yaw_cov: 0.20
+    odom_twist_vx_cov: 0.10
+    odom_twist_vyaw_cov: 0.30
 
     # Battery/supply sensing via Arduino A0 (2:1 divider, 12k/12k).
     # Polled with the 'B' serial command and published as sensor_msgs/BatteryState.

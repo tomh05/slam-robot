@@ -29,12 +29,18 @@
        Observed (static, level): z=+9.81. Tilting forward gave y=+9.81,
        backward y=-9.81; tilting right side gave x=+9.81, left x=-9.81.
        => sensor frame is (right, forward, up) relative to base_link, i.e.
-       yaw = -pi/2 from base_link to imu_link. Verify after bringup:
-       rotating robot left/CCW (viewed from above) should give angular_velocity.z > 0.
-       Adjust imu_x/y/z to the measured mounting position. -->
-  <xacro:arg name="imu_x" default="0.0" />
-  <xacro:arg name="imu_y" default="0.0" />
-  <xacro:arg name="imu_z" default="0.02" />
+       yaw = -pi/2 from base_link to imu_link. Verified: rotating robot
+       left/CCW (viewed from above) gives angular_velocity.z > 0.
+
+       Measured physical mount (2026-07-30): 6.5 cm forward of robot centre,
+       3.5 cm to the right of robot centre, 8 cm above the ground plane.
+       REP-103: forward = +X, right = -Y, up = +Z.
+       NOTE: in two_d_mode the EKF ignores z; imu_z only affects RViz display.
+       The x/y offset matters if IMU linear accel is ever fused (lever-arm
+       term scales with yaw rate squared), so keep it accurate. -->
+  <xacro:arg name="imu_x" default="0.065" />
+  <xacro:arg name="imu_y" default="-0.035" />
+  <xacro:arg name="imu_z" default="0.08" />
   <xacro:arg name="imu_roll" default="0.0" />
   <xacro:arg name="imu_pitch" default="0.0" />
   <xacro:arg name="imu_yaw" default="-1.5707963" />

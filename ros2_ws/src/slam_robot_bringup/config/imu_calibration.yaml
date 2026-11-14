@@ -6,3 +6,11 @@ bm160_imu_node:
     accel_offset_x: 0.481549
     accel_offset_y: -0.233884
     accel_offset_z: 0.131846
+
+    # Tuned from scripts/calibrate_odom_cov.py --imu-only (static noise).
+    # angular_velocity_covariance = max over gyro axes of measured variance (~6e-6).
+    # linear_acceleration_covariance = max over accel axes of measured variance (~5.08e-3).
+    # NOTE: these are still-noise estimates; vibration during motion may increase
+    # real noise. Re-measure during motion if fusing accel ax/ay.
+    angular_velocity_covariance: 0.000006
+    linear_acceleration_covariance: 0.005083

@@ -100,6 +100,18 @@ class ArduinoBaseNode(Node):
         self.declare_parameter('motors_enabled', False)
         self.declare_parameter('send_zero_when_disabled', True)
 
+        # Odometry covariance placeholders (m^2 and (rad/s)^2).
+        # These are the uncertainty the filter should assume about the raw
+        # encoder pose/twist. They are NOT sensor noise — they encode how much
+        # you trust wheel odom vs the EKF/SLAM. For a tracked base, yaw is the
+        # weakest channel (track slip), so pose yaw covariance should be much
+        # larger than x/y. Tune with scripts/calibrate_odom_cov.py.
+        self.declare_parameter('odom_pose_x_cov', 0.05)
+        self.declare_parameter('odom_pose_y_cov', 0.05)
+        self.declare_parameter('odom_pose_yaw_cov', 0.20)
+        self.declare_parameter('odom_twist_vx_cov', 0.10)
+        self.declare_parameter('odom_twist_vyaw_cov', 0.05)
+
         # Battery/supply sensing (polled from Arduino via 'B' command).
         self.declare_parameter('battery_poll_period_s', 5.0)
         self.declare_parameter('battery_frame_id', 'base_link')
@@ -148,6 +160,13 @@ class ArduinoBaseNode(Node):
         self.publish_tf = bool(self.get_parameter('publish_tf').value)
         self.motors_enabled = bool(self.get_parameter('motors_enabled').value)
         self.send_zero_when_disabled = bool(self.get_parameter('send_zero_when_disabled').value)
+
+        # Params read from config/arduino_base.yaml (set via declare_parameter in __init__)
+        self.odom_pose_x_cov = float(self.get_parameter('odom_pose_x_cov').value)
+        self.odom_pose_y_cov = float(self.get_parameter('odom_pose_y_cov').value)
+        self.odom_pose_yaw_cov = float(self.get_parameter('odom_pose_yaw_cov').value)
+        self.odom_twist_vx_cov = float(self.get_parameter('odom_twist_vx_cov').value)
+        self.odom_twist_vyaw_cov = float(self.get_parameter('odom_twist_vyaw_cov').value)
 
         self.battery_poll_period_s = float(self.get_parameter('battery_poll_period_s').value)
         self.battery_frame_id = self.get_parameter('battery_frame_id').value
@@ -446,12 +465,12 @@ class ArduinoBaseNode(Node):
         odom.twist.twist.linear.x = linear_velocity
         odom.twist.twist.angular.z = angular_velocity
 
-        # Very rough placeholder covariances. These should be tuned after encoder calibration.
-        odom.pose.covariance[0] = 0.05
-        odom.pose.covariance[7] = 0.05
-        odom.pose.covariance[35] = 0.20
-        odom.twist.covariance[0] = 0.10
-        odom.twist.covariance[35] = 0.30
+        # Odometry covariances from params so they can be tuned without code edits.
+        odom.pose.covariance[0] = self.odom_pose_x_cov
+        odom.pose.covariance[7] = self.odom_pose_y_cov
+        odom.pose.covariance[35] = self.odom_pose_yaw_cov
+        odom.twist.covariance[0] = self.odom_twist_vx_cov
+        odom.twist.covariance[35] = self.odom_twist_vyaw_cov
         self.odom_pub.publish(odom)
 
         if self.tf_broadcaster is not None:
