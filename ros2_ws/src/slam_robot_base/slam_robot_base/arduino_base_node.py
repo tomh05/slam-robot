@@ -110,7 +110,7 @@ class ArduinoBaseNode(Node):
         self.declare_parameter('odom_pose_y_cov', 0.05)
         self.declare_parameter('odom_pose_yaw_cov', 0.20)
         self.declare_parameter('odom_twist_vx_cov', 0.10)
-        self.declare_parameter('odom_twist_vyaw_cov', 0.30)
+        self.declare_parameter('odom_twist_vyaw_cov', 0.05)
 
         # Battery/supply sensing (polled from Arduino via 'B' command).
         self.declare_parameter('battery_poll_period_s', 5.0)
@@ -161,6 +161,7 @@ class ArduinoBaseNode(Node):
         self.motors_enabled = bool(self.get_parameter('motors_enabled').value)
         self.send_zero_when_disabled = bool(self.get_parameter('send_zero_when_disabled').value)
 
+        # Params read from config/arduino_base.yaml (set via declare_parameter in __init__)
         self.odom_pose_x_cov = float(self.get_parameter('odom_pose_x_cov').value)
         self.odom_pose_y_cov = float(self.get_parameter('odom_pose_y_cov').value)
         self.odom_pose_yaw_cov = float(self.get_parameter('odom_pose_yaw_cov').value)

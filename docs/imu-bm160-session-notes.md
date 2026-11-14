@@ -71,6 +71,16 @@ sudo i2cdetect -y 1
   `bm160_imu_node.py` defaults to match.
 - [ ] Open: static run residual gyro means were nonzero (x=-0.015, y=-0.0096, z=-0.0045 rad/s) despite
 existing `gyro_bias_*` params. Re-check bias calibration / sign convention before relying on small residuals.
+- [x] **Motion calibration (2026-07-30):** `calibrate.bag` (26 s slow teleop, 529 odom / 2719 IMU msgs).
+  Regressing 1s-window IMU yaw-change vs odom yaw-change: slope=0.6525 → odom over-reports
+  yaw by **1.53x**. Residual after scale fit = 0.91°/window (pure scale, not slip).
+  - `track_width_m`: 0.155 → **0.238** (effective skid-steer separation).
+  - `odom_twist_vyaw_cov`: 0.30 → **0.05** (yaw tracks IMU well after scale fix).
+  - `odom_twist_vx_cov`: 0.10 (no independent ground truth yet, leave conservative).
+  - `odom_pose_x/y_cov`: 0.05, `odom_pose_yaw_cov`: 0.20 (placeholders; pose not fused in EKF config).
+  - `bm160_imu_node` defaults updated: `angular_velocity_covariance=0.000006`,
+    `linear_acceleration_covariance=0.005083` (from static noise run).
+  - `slam_robot.urdf.xacro` updated: `imu_x=0.065`, `imu_y=-0.035`, `imu_z=0.08` (measured mount).
 - [ ] Optional later: experiment with fusing IMU linear acceleration (`ax`/`ay`) only after orientation/gravity handling and covariances are validated; keep `two_d_mode` behavior in mind.
 - [ ] Point `slam_toolbox`/Nav2 at filtered odometry (`/odometry/filtered`) / ensure TF/odom frame config matches once SLAM bringup is wired.
 
