@@ -212,16 +212,17 @@ def main(args=None):
                         help='disable inversion')
     parser.add_argument('--no-correct', action='store_true',
                         help='disable the second order angle correction')
-    # Strip ROS 2 launch arguments (--ros-args, -r, etc.) before parsing
-    # with argparse, but keep the original args for rclpy.init().
-    ros_args = rclpy.utilities.remove_ros_args(args)
+    # Console-script entry points pass sys.argv with the executable path at
+    # index 0. remove_ros_args() expects an argument list without that path.
+    cli_args = sys.argv[1:] if args is None else args
+    ros_args = rclpy.utilities.remove_ros_args(cli_args)
     cli = parser.parse_args(ros_args)
     if getattr(cli, 'no_invert', False):
         cli.invert = False
     else:
         cli.invert = True  # default to inverted as per field testing
 
-    rclpy.init(args=args)
+    rclpy.init(args=cli_args)
     node = LidarScanPublisher(cli)
     try:
         rclpy.spin(node)
