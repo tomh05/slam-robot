@@ -212,7 +212,10 @@ def main(args=None):
                         help='disable inversion')
     parser.add_argument('--no-correct', action='store_true',
                         help='disable the second order angle correction')
-    cli = parser.parse_args(args)
+    # Strip ROS 2 launch arguments (--ros-args, -r, etc.) before parsing
+    # with argparse, but keep the original args for rclpy.init().
+    ros_args = rclpy.utilities.remove_ros_args(args)
+    cli = parser.parse_args(ros_args)
     if getattr(cli, 'no_invert', False):
         cli.invert = False
     else:
