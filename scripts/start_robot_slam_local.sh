@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Script to run ON the robot to start the full ROS 2 stack.
-# Starts: robot core (with motors enabled) + lidar_scan_publisher
+# Script to run ON the robot to start local SLAM bring-up.
+# Starts: robot_core_ekf (or raw core), lidar_scan_publisher, and slam_toolbox mapping.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -38,55 +38,25 @@ fi
 
 export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-42}"
 
-# Lidar configuration
+ODOM_SOURCE="${ODOM_SOURCE:-ekf}"
+MOTORS_ENABLED="${MOTORS_ENABLED:-false}"
 LIDAR_PORT="${LIDAR_PORT:-/dev/lidar}"
 LIDAR_BAUD="${LIDAR_BAUD:-153600}"
 LIDAR_FRAME_ID="${LIDAR_FRAME_ID:-lidar_link}"
-LIDAR_INVERT="${LIDAR_INVERT:-true}"
 
-echo "=== Starting robot stack (local on robot) ==="
+echo "=== Starting robot SLAM stack (local on robot) ==="
 echo "Project: $PROJECT_ROOT"
 echo "ROS_DOMAIN_ID: $ROS_DOMAIN_ID"
-echo "Motors: enabled"
-echo "Lidar: $LIDAR_PORT @ $LIDAR_BAUD (frame: $LIDAR_FRAME_ID), invert: $LIDAR_INVERT"
+echo "Odometry source: $ODOM_SOURCE"
+echo "Motors enabled: $MOTORS_ENABLED"
+echo "Lidar: $LIDAR_PORT @ $LIDAR_BAUD (frame: $LIDAR_FRAME_ID)"
 echo ""
 
-LIDAR_ARGS=(
-    --port "$LIDAR_PORT"
-    --baud "$LIDAR_BAUD"
-    --frame-id "$LIDAR_FRAME_ID"
-)
-if [ "$LIDAR_INVERT" = "false" ] || [ "$LIDAR_INVERT" = "0" ] || [ "$LIDAR_INVERT" = "no" ]; then
-    LIDAR_ARGS+=(--no-invert)
-fi
-
-echo "Starting lidar_scan_publisher..."
-setsid bash -c "ros2 run lidar_scan_publisher lidar_scan_publisher ${LIDAR_ARGS[*]}" &
-LIDAR_PID=$!
-
-sleep 2
-
-echo "Starting robot_core (motors enabled)..."
-setsid bash -c "ros2 launch slam_robot_bringup robot_core.launch.py motors_enabled:=true" &
-CORE_PID=$!
-
-CLEANED_UP=0
-cleanup() {
-    if [ "$CLEANED_UP" -eq 1 ]; then
-        return
-    fi
-    CLEANED_UP=1
-    echo ""
-    echo "Shutting down..."
-    kill -TERM -"$LIDAR_PID" 2>/dev/null || true
-    kill -TERM -"$CORE_PID" 2>/dev/null || true
-    sleep 2
-    kill -KILL -"$LIDAR_PID" 2>/dev/null || true
-    kill -KILL -"$CORE_PID" 2>/dev/null || true
-    wait 2>/dev/null || true
-}
-
-trap cleanup INT TERM EXIT
-
-wait -n "$LIDAR_PID" "$CORE_PID" 2>/dev/null || wait
-cleanup
+echo "Starting slam_mapping.launch.py..."
+exec ros2 launch slam_robot_bringup slam_mapping.launch.py \
+    odom_source:="$ODOM_SOURCE" \
+    motors_enabled:="$MOTORS_ENABLED" \
+    start_lidar:=true \
+    lidar_port:="$LIDAR_PORT" \
+    lidar_baud:="$LIDAR_BAUD" \
+    lidar_frame_id:="$LIDAR_FRAME_ID"
