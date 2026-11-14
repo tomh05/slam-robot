@@ -64,6 +64,13 @@ sudo i2cdetect -y 1
     - `--imu-only`: static IMU noise variance (robot still/level)
     - `--odom-drive`: odom yaw-rate residual during teleop drive
   This replaces the placeholder covariances with tuned values.
+- [x] Applied static IMU noise results (30 s still/level run):
+  `angular_velocity_covariance: 0.000006` (rad²/s², max of gyro axes x=4e-6/y=6e-6/z=1e-6)
+  `linear_acceleration_covariance: 0.005083` ((m/s²)², accel x=5.08e-3/y=3.62e-3/z=2.27e-3)
+  Set in `ros2_ws/src/slam_robot_bringup/config/imu_calibration.yaml` and updated
+  `bm160_imu_node.py` defaults to match.
+- [ ] Open: static run residual gyro means were nonzero (x=-0.015, y=-0.0096, z=-0.0045 rad/s) despite
+existing `gyro_bias_*` params. Re-check bias calibration / sign convention before relying on small residuals.
 - [ ] Optional later: experiment with fusing IMU linear acceleration (`ax`/`ay`) only after orientation/gravity handling and covariances are validated; keep `two_d_mode` behavior in mind.
 - [ ] Point `slam_toolbox`/Nav2 at filtered odometry (`/odometry/filtered`) / ensure TF/odom frame config matches once SLAM bringup is wired.
 

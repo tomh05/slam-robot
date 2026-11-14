@@ -87,8 +87,12 @@ class Bm160ImuNode(Node):
         self.declare_parameter('accel_offset_y', 0.0)
         self.declare_parameter('accel_offset_z', 0.0)
         # Conservative defaults; calibrate/tune for your mounting and vibration.
-        self.declare_parameter('angular_velocity_covariance', 0.02)
-        self.declare_parameter('linear_acceleration_covariance', 0.04)
+        # Static noise measured via scripts/calibrate_odom_cov.py --imu-only
+        # (30 s still, level). Gyro z variance ~1e-6 rad^2/s^2, worst-axis max ~6e-6;
+        # linear accel variance ~5.08e-3 (m/s^2)^2. Tuned from measurements; keep
+        # conservative margins for vibration during motion (see script notes).
+        self.declare_parameter('angular_velocity_covariance', 0.000006)
+        self.declare_parameter('linear_acceleration_covariance', 0.005083)
 
         self.bus_num = int(self.get_parameter('i2c_bus').value)
         self.address = int(self.get_parameter('i2c_address').value)
