@@ -80,7 +80,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(base_launch),
             launch_arguments={
                 'motors_enabled': motors_enabled,
-                # EKF publishes odom -> base_link in ekf.yaml; avoid dual TF publishers.
+                # EKF publishes odom -> base_footprint in ekf.yaml; avoid dual TF publishers.
                 'publish_tf': 'false',
             }.items(),
         ),

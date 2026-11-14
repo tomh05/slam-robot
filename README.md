@@ -82,7 +82,7 @@ Key ROS interfaces:
 - `/scan` (`sensor_msgs/LaserScan`) — 2D LiDAR data.
 - `/odom` (`nav_msgs/Odometry`) — wheel/encoder odometry from the base node.
 - `/arduino_base_node/status_raw` — raw Arduino status for bring-up/debugging.
-- TF: `map -> odom -> base_link -> lidar_link` when SLAM/localisation is active.
+- TF: `map -> odom -> base_footprint -> base_link -> lidar_link` when SLAM/localisation is active.
 
 For design details, see [`docs/architecture.md`](docs/architecture.md).
 

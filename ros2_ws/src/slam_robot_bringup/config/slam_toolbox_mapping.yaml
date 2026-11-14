@@ -4,9 +4,10 @@ slam_toolbox:
     mode: mapping
     map_frame: map
     odom_frame: odom
-    base_frame: base_link
+    base_frame: base_footprint
     scan_topic: /scan
 
+    transform_publish_period: 0.02
     transform_timeout: 0.3
     tf_buffer_duration: 20.0
     map_update_interval: 2.0
