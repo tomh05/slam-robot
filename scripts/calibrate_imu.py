@@ -100,9 +100,9 @@ def print_calibration(gyro: dict, faces: dict[str, dict]) -> bool:
     gx, gy, gz = gyro['mean_gyro']
     print()
     print('Launch parameters:')
-    print(f'  imu_gyro_bias_x:={-gx:.6f}')
-    print(f'  imu_gyro_bias_y:={-gy:.6f}')
-    print(f'  imu_gyro_bias_z:={-gz:.6f}')
+    print(f'  imu_gyro_bias_x:={gx:.6f}')
+    print(f'  imu_gyro_bias_y:={gy:.6f}')
+    print(f'  imu_gyro_bias_z:={gz:.6f}')
     for axis, offset in zip(('x', 'y', 'z'), offsets):
         if offset is None:
             print(f'  imu_accel_offset_{axis}:=UNAVAILABLE')
@@ -160,7 +160,7 @@ def main() -> int:
     if args.still_only:
         rclpy.shutdown()
         gx, gy, gz = gyro['mean_gyro']
-        print(f'\nGyro bias parameters: {-gx:.6f}, {-gy:.6f}, {-gz:.6f}')
+        print(f'\nGyro bias parameters: {gx:.6f}, {gy:.6f}, {gz:.6f}')
         print('A still-only accelerometer reading is not a valid 3-axis offset.')
         return 0
 

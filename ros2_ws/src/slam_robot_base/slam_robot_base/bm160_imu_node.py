@@ -19,8 +19,6 @@ from typing import Optional
 
 import rclpy
 from rclpy.node import Node
-from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry
 from sensor_msgs.msg import Imu
 
 try:
@@ -88,16 +86,6 @@ class Bm160ImuNode(Node):
         self.declare_parameter('accel_offset_x', 0.0)
         self.declare_parameter('accel_offset_y', 0.0)
         self.declare_parameter('accel_offset_z', 0.0)
-        # Conservative zero-velocity updates for stationary yaw. Both /cmd_vel
-        # and wheel /odom must indicate rest for a sustained interval before
-        # small gyro z values are clamped to zero.
-        self.declare_parameter('zupt_enabled', True)
-        self.declare_parameter('zupt_min_duration_s', 1.0)
-        self.declare_parameter('zupt_cmd_timeout_s', 0.5)
-        self.declare_parameter('zupt_odom_timeout_s', 0.5)
-        self.declare_parameter('zupt_linear_threshold_mps', 0.02)
-        self.declare_parameter('zupt_angular_threshold_rps', 0.02)
-        self.declare_parameter('zupt_gyro_deadband_radps', 0.008)
         # Conservative defaults; calibrate/tune for your mounting and vibration.
         # Static noise measured via scripts/calibrate_odom_cov.py --imu-only
         # (30 s still, level). Gyro z variance ~1e-6 rad^2/s^2, worst-axis max ~6e-6;
@@ -128,13 +116,6 @@ class Bm160ImuNode(Node):
         )
         ang_cov = float(self.get_parameter('angular_velocity_covariance').value)
         acc_cov = float(self.get_parameter('linear_acceleration_covariance').value)
-        self.zupt_enabled = bool(self.get_parameter('zupt_enabled').value)
-        self.zupt_min_duration_s = float(self.get_parameter('zupt_min_duration_s').value)
-        self.zupt_cmd_timeout_s = float(self.get_parameter('zupt_cmd_timeout_s').value)
-        self.zupt_odom_timeout_s = float(self.get_parameter('zupt_odom_timeout_s').value)
-        self.zupt_linear_threshold_mps = float(self.get_parameter('zupt_linear_threshold_mps').value)
-        self.zupt_angular_threshold_rps = float(self.get_parameter('zupt_angular_threshold_rps').value)
-        self.zupt_gyro_deadband_radps = float(self.get_parameter('zupt_gyro_deadband_radps').value)
 
         if rate_hz <= 0.0:
             raise ValueError('rate_hz must be positive')
@@ -142,16 +123,6 @@ class Bm160ImuNode(Node):
             raise ValueError(f'accel_range_g must be one of {sorted(ACC_RANGES)}')
         if gyro_range_dps not in GYR_RANGES:
             raise ValueError(f'gyro_range_dps must be one of {sorted(GYR_RANGES)}')
-        if self.zupt_min_duration_s < 0.0:
-            raise ValueError('zupt_min_duration_s must be non-negative')
-        if self.zupt_cmd_timeout_s <= 0.0 or self.zupt_odom_timeout_s <= 0.0:
-            raise ValueError('ZUPT timeouts must be positive')
-        if min(
-            self.zupt_linear_threshold_mps,
-            self.zupt_angular_threshold_rps,
-            self.zupt_gyro_deadband_radps,
-        ) < 0.0:
-            raise ValueError('ZUPT thresholds must be non-negative')
 
         self.acc_range_reg, self.acc_lsb_per_g = ACC_RANGES[accel_range_g]
         self.gyr_range_reg, self.gyr_lsb_per_dps = GYR_RANGES[gyro_range_dps]
@@ -167,22 +138,6 @@ class Bm160ImuNode(Node):
         self.linear_acceleration_covariance[4] = acc_cov
         self.linear_acceleration_covariance[8] = acc_cov
 
-        self.last_cmd_vel_time = None
-        self.last_cmd_linear_x = 0.0
-        self.last_cmd_angular_z = 0.0
-        self.last_odom_time = None
-        self.last_odom_linear_x = 0.0
-        self.last_odom_angular_z = 0.0
-        self.zupt_since = None
-        self.zupt_active = False
-
-        self.cmd_sub = self.create_subscription(
-            Twist, '/cmd_vel', self._cmd_vel_callback, 10
-        )
-        self.odom_sub = self.create_subscription(
-            Odometry, '/odom', self._odom_callback, 10
-        )
-
         self.publisher = self.create_publisher(Imu, topic, 10)
         self.bus = self._open_bus()
         self._init_device()
@@ -193,59 +148,6 @@ class Bm160ImuNode(Node):
             f'addr=0x{self.address:02x}, bus={self.bus_num}, '
             f'acc=±{accel_range_g}g, gyr=±{gyro_range_dps}dps'
         )
-
-    def _cmd_vel_callback(self, msg: Twist) -> None:
-        self.last_cmd_vel_time = time.monotonic()
-        self.last_cmd_linear_x = msg.linear.x
-        self.last_cmd_angular_z = msg.angular.z
-
-    def _odom_callback(self, msg: Odometry) -> None:
-        self.last_odom_time = time.monotonic()
-        self.last_odom_linear_x = msg.twist.twist.linear.x
-        self.last_odom_angular_z = msg.twist.twist.angular.z
-
-    def _update_zupt(self) -> bool:
-        if not self.zupt_enabled:
-            self.zupt_since = None
-            self.zupt_active = False
-            return False
-
-        now = time.monotonic()
-        cmd_fresh = (
-            self.last_cmd_vel_time is not None
-            and now - self.last_cmd_vel_time <= self.zupt_cmd_timeout_s
-        )
-        odom_fresh = (
-            self.last_odom_time is not None
-            and now - self.last_odom_time <= self.zupt_odom_timeout_s
-        )
-        wheel_and_command_still = (
-            cmd_fresh
-            and odom_fresh
-            and abs(self.last_cmd_linear_x) <= self.zupt_linear_threshold_mps
-            and abs(self.last_cmd_angular_z) <= self.zupt_angular_threshold_rps
-            and abs(self.last_odom_linear_x) <= self.zupt_linear_threshold_mps
-            and abs(self.last_odom_angular_z) <= self.zupt_angular_threshold_rps
-        )
-
-        if wheel_and_command_still:
-            if self.zupt_since is None:
-                self.zupt_since = now
-        else:
-            self.zupt_since = None
-
-        active = (
-            self.zupt_since is not None
-            and now - self.zupt_since >= self.zupt_min_duration_s
-        )
-        if active != self.zupt_active:
-            self.zupt_active = active
-            state = 'active' if active else 'inactive'
-            self.get_logger().info(
-                f'ZUPT zero-velocity gate {state}',
-                throttle_duration_sec=1.0,
-            )
-        return active
 
     def _open_bus(self):
         if smbus is None:
@@ -339,9 +241,6 @@ class Bm160ImuNode(Node):
         if sample is None:
             return
         gyro, accel = sample
-
-        if self._update_zupt() and abs(gyro[2]) <= self.zupt_gyro_deadband_radps:
-            gyro = (gyro[0], gyro[1], 0.0)
 
         msg = Imu()
         msg.header.stamp = self.get_clock().now().to_msg()

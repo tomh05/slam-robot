@@ -7,17 +7,6 @@ bm160_imu_node:
     accel_offset_y: -0.233884
     accel_offset_z: 0.131846
 
-    # Zero-velocity update: after /cmd_vel and /odom remain at rest for 1 s,
-    # clamp only small gyro-z readings to zero. This prevents stationary bias
-    # from becoming accumulated EKF yaw drift.
-    zupt_enabled: false
-    zupt_min_duration_s: 1.0
-    zupt_cmd_timeout_s: 0.5
-    zupt_odom_timeout_s: 0.5
-    zupt_linear_threshold_mps: 0.02
-    zupt_angular_threshold_rps: 0.02
-    zupt_gyro_deadband_radps: 0.008
-
     # Tuned from scripts/calibrate_odom_cov.py --imu-only (static noise).
     # angular_velocity_covariance = max over gyro axes of measured variance (~6e-6).
     # linear_acceleration_covariance = max over accel axes of measured variance (~5.08e-3).
