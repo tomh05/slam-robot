@@ -31,15 +31,16 @@ arduino_base_node:
     battery_poll_period_s: 5.0
     battery_frame_id: base_link
     battery_location: base
-    # Calibrated from measured pack-vs-ROS pairs:
-    #   8.25/8.826 and 8.12/8.69 => average scale ~= 0.9346
-    battery_voltage_scale: 0.9346
+    # Arduino A0 is calibrated directly from the measured 803 -> 7.61 V
+    # and 904 -> 8.40 V battery points.
+    battery_voltage_scale: 1.0
     battery_source_dc_min_v: 8.7
     battery_voltage_min_v: 6.0
     battery_voltage_max_v: 9.5
     # Approximate 2S Li-ion percentage bounds (set empty_voltage >= full_voltage to disable).
     battery_full_voltage: 8.4
     battery_empty_voltage: 6.6
+    battery_design_capacity_mah: 3000.0
     wheel_radius_m: 0.029
 
     # Encoder characterisation from bench calibration (S1 edges/2, manual wheel revs).
@@ -100,12 +101,13 @@ arduino_base_node:
     battery_poll_period_s: 5.0
     battery_frame_id: base_link
     battery_location: base
-    # Calibrated from measured pack-vs-ROS pairs:
-    #   8.25/8.826 and 8.12/8.69 => average scale ~= 0.9346
-    battery_voltage_scale: 0.9346
+    # Arduino A0 is calibrated directly from the measured 803 -> 7.61 V
+    # and 904 -> 8.40 V battery points.
+    battery_voltage_scale: 1.0
     battery_source_dc_min_v: 8.7
     battery_voltage_min_v: 6.0
     battery_voltage_max_v: 9.5
     # Approximate 2S Li-ion percentage bounds (set empty_voltage >= full_voltage to disable).
     battery_full_voltage: 8.4
     battery_empty_voltage: 6.6
+    battery_design_capacity_mah: 3000.0

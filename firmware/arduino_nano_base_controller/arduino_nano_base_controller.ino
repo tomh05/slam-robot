@@ -98,11 +98,13 @@ float KI = 0.05f;
 float KD = 0.0f;
 
 // Battery/supply sensing configuration.
-// Assumes DEFAULT 5 V ADC reference on Nano (10-bit ADC) and 2:1 divider.
+// Assumes DEFAULT ADC behavior on Nano (10-bit ADC) and 2:1 divider.
 const uint16_t BATTERY_ADC_SAMPLES = 8;
-const unsigned long BATTERY_ADC_REFERENCE_MV = 5000;
-const unsigned long BATTERY_DIVIDER_NUMERATOR = 2;
-const unsigned long BATTERY_DIVIDER_DENOMINATOR = 1;
+// Two-point calibration based on measured pack voltages:
+//   ADC 803 -> 7610 mV
+//   ADC 904 -> 8400 mV
+// Integer form of: supply_mv = 790/101 * ADC + 134240/101
+// = (790 * ADC + 134240) / 101
 const unsigned long BATTERY_DC_EXTERNAL_MIN_MV = 8700;
 const unsigned long BATTERY_PRESENT_MIN_MV = 6000;
 const unsigned long BATTERY_PRESENT_MAX_MV = 8600;
@@ -230,7 +232,7 @@ uint16_t readBatteryAdcRaw() {
 }
 
 unsigned long adcToMillivolts(uint16_t adc_raw) {
-  return ((unsigned long)adc_raw * BATTERY_ADC_REFERENCE_MV) / 1023UL;
+  return (790UL * adc_raw + 134240UL) / 101UL;
 }
 
 uint8_t classifyBatterySource(unsigned long supply_mv) {
@@ -245,8 +247,7 @@ uint8_t classifyBatterySource(unsigned long supply_mv) {
 
 void reportBatteryStatus() {
   uint16_t adc_raw = readBatteryAdcRaw();
-  unsigned long v_div_mv = adcToMillivolts(adc_raw);
-  unsigned long v_supply_mv = (v_div_mv * BATTERY_DIVIDER_NUMERATOR) / BATTERY_DIVIDER_DENOMINATOR;
+  unsigned long v_supply_mv = adcToMillivolts(adc_raw);
   uint8_t source = classifyBatterySource(v_supply_mv);
 
   Serial.print(F("B "));

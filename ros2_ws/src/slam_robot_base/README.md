@@ -77,10 +77,16 @@ Key parameters (see `config/arduino_base.yaml`):
 - `battery_poll_period_s` — polling interval in seconds (`<= 0` disables)
 - `battery_frame_id`, `battery_location`
 - `battery_voltage_scale` — ROS-side calibration multiplier applied to measured voltage
-  (default `0.9346`, from measured pack-vs-ROS ratio)
+  (default `1.0`; the Arduino now applies the measured A0 calibration directly)
 - `battery_source_dc_min_v` — voltage threshold for classifying external/DC supply
 - `battery_voltage_min_v`, `battery_voltage_max_v` — plausible battery voltage bounds
 - `battery_full_voltage`, `battery_empty_voltage` — rough percentage mapping bounds (2S Li-ion defaults)
+- `battery_design_capacity_mah` — pack label capacity (default `3000` mAh); used to populate
+  ROS `BatteryState.capacity`, `design_capacity`, and estimated `charge`
+
+The Arduino reports ADC-based pack voltage in both battery and external modes.
+At idle or under load, pack voltage includes terminal-voltage sag, so the published
+percentage and derived `charge` are estimates rather than coulomb-counted results.
 
 ## BM160 IMU calibration
 

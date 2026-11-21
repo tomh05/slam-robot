@@ -116,12 +116,13 @@ class ArduinoBaseNode(Node):
         self.declare_parameter('battery_poll_period_s', 5.0)
         self.declare_parameter('battery_frame_id', 'base_link')
         self.declare_parameter('battery_location', 'base')
-        self.declare_parameter('battery_voltage_scale', 0.9346)
+        self.declare_parameter('battery_voltage_scale', 1.0)
         self.declare_parameter('battery_source_dc_min_v', 8.7)
         self.declare_parameter('battery_voltage_min_v', 6.0)
         self.declare_parameter('battery_voltage_max_v', 9.5)
         self.declare_parameter('battery_full_voltage', 8.4)
         self.declare_parameter('battery_empty_voltage', 6.6)
+        self.declare_parameter('battery_design_capacity_mah', 3000.0)
 
         self.port = self.get_parameter('port').value
         self.baud = int(self.get_parameter('baud').value)
@@ -177,6 +178,7 @@ class ArduinoBaseNode(Node):
         self.battery_voltage_max_v = float(self.get_parameter('battery_voltage_max_v').value)
         self.battery_full_voltage = float(self.get_parameter('battery_full_voltage').value)
         self.battery_empty_voltage = float(self.get_parameter('battery_empty_voltage').value)
+        self.battery_design_capacity_mah = float(self.get_parameter('battery_design_capacity_mah').value)
 
         if self.left_ticks_per_meter <= 0.0 or self.right_ticks_per_meter <= 0.0:
             raise ValueError('left_ticks_per_meter and right_ticks_per_meter must be positive')
@@ -378,7 +380,8 @@ class ArduinoBaseNode(Node):
         msg.current = float('nan')
         msg.charge = float('nan')
         msg.capacity = float('nan')
-        msg.design_capacity = float('nan')
+        design_capacity_ah = max(self.battery_design_capacity_mah, 0.0) / 1000.0
+        msg.design_capacity = float(design_capacity_ah)
         msg.power_supply_health = BatteryState.POWER_SUPPLY_HEALTH_UNKNOWN
         msg.power_supply_technology = BatteryState.POWER_SUPPLY_TECHNOLOGY_UNKNOWN
         msg.present = False
@@ -402,9 +405,14 @@ class ArduinoBaseNode(Node):
             msg.power_supply_status = BatteryState.POWER_SUPPLY_STATUS_UNKNOWN
             msg.present = False
 
-        # Estimate SoC from the sample 2S Li-ion OCV lookup (clamped to [0, 1]).
-        # Note: this is an approximation; voltage sag under load and cell variation affect accuracy.
-        msg.percentage = float(self.voltage_to_percentage(voltage))
+        if is_battery:
+            # Estimate SoC from the sample 2S Li-ion OCV lookup (clamped to [0, 1]).
+            # This is a resting-voltage approximation; voltage sag and cell variation affect accuracy.
+            msg.percentage = float(self.voltage_to_percentage(voltage))
+            msg.charge = float(design_capacity_ah * msg.percentage)
+            msg.capacity = float(design_capacity_ah)
+        else:
+            msg.percentage = float('nan')
 
         if self.last_battery_source != status.source:
             source_names = {0: 'unknown', 1: 'battery', 2: 'dc_external'}
